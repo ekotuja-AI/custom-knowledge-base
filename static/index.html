@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikipedia Offline RAG - Interface Web</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .panel h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon {
+            font-size: 1.5em;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        textarea,
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus,
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .result-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .result-content {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .result-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: #999;
+        }
+
+        .answer {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .answer-text {
+            color: #333;
+            line-height: 1.8;
+            margin-bottom: 10px;
+        }
+
+        .sources {
+            margin-top: 15px;
+        }
+
+        .sources-title {
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #c00;
+            margin-top: 15px;
+        }
+
+        .success {
+            background: #efe;
+            color: #060;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #060;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Wikipedia Offline RAG</h1>
+            <p>Sistema de busca semântica e perguntas com IA - 100% Offline</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalChunks">...</div>
+                <div class="stat-label">Chunks na Base</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="qdrantStatus">...</div>
+                <div class="stat-label">Status Qdrant</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="embeddingStatus">...</div>
+                <div class="stat-label">Embedding Model</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="ollamaStatus">...</div>
+                <div class="stat-label">Ollama LLM</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Painel de Perguntas -->
+            <div class="panel">
+                <h2><span class="icon">💬</span> Fazer Pergunta</h2>
+                <div class="input-group">
+                    <label for="question">Digite sua pergunta:</label>
+                    <textarea id="question" placeholder="Ex: O que é inteligência artificial?"></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="maxChunks">Número de chunks para contexto:</label>
+                    <input type="number" id="maxChunks" value="5" min="1" max="10">
+                </div>
+                <button onclick="askQuestion()">
+                    Perguntar com IA
+                </button>
+                <div id="answerResults"></div>
+            </div>
+
+            <!-- Painel de Busca -->
+            <div class="panel">
+                <h2><span class="icon">🔍</span> Busca Semântica</h2>
+                <div class="input-group">
+                    <label for="searchQuery">Termo de busca:</label>
+                    <input type="text" id="searchQuery" placeholder="Ex: machine learning">
+                </div>
+                <div class="input-group">
+                    <label for="searchLimit">Número de resultados:</label>
+                    <input type="number" id="searchLimit" value="5" min="1" max="20">
+                </div>
+                <button onclick="performSearch()">
+                    Buscar
+                </button>
+                <div id="searchResults"></div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top: 20px;">
+            <h2><span class="icon">➕</span> Adicionar Artigo</h2>
+            <div class="input-group">
+                <label for="articleTitle">Título do artigo da Wikipedia:</label>
+                <input type="text" id="articleTitle" placeholder="Ex: Python (programming language)">
+            </div>
+            <button onclick="addArticle()">
+                Adicionar à Base
+            </button>
+            <div id="addResults"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9000';
+
+        // Carregar estatísticas ao iniciar
+        window.addEventListener('load', loadStats);
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                
+                document.getElementById('qdrantStatus').textContent = data.qdrant_conectado ? '✅ OK' : '❌ OFF';
+                document.getElementById('embeddingStatus').textContent = data.modelo_embedding_carregado ? '✅ OK' : '❌ OFF';
+                
+                // Verificar Ollama
+                try {
+                    const ollamaResp = await fetch('http://localhost:11434/api/version');
+                    document.getElementById('ollamaStatus').textContent = ollamaResp.ok ? '✅ OK' : '❌ OFF';
+                } catch {
+                    document.getElementById('ollamaStatus').textContent = '❌ OFF';
+                }
+
+                // Buscar total de chunks
+                try {
+                    const qdrantResp = await fetch('http://localhost:6333/collections/wikipedia_langchain');
+                    const qdrantData = await qdrantResp.json();
+                    document.getElementById('totalChunks').textContent = qdrantData.result.points_count.toLocaleString();
+                } catch {
+                    document.getElementById('totalChunks').textContent = 'N/A';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar estatísticas:', error);
+            }
+        }
+
+        async function askQuestion() {
+            const question = document.getElementById('question').value;
+            const maxChunks = document.getElementById('maxChunks').value;
+            const resultsDiv = document.getElementById('answerResults');
+
+            if (!question.trim()) {
+                resultsDiv.innerHTML = '<div class="error">Por favor, digite uma pergunta.</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Processando sua pergunta...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/perguntar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pergunta: question, max_chunks: parseInt(maxChunks) })
+                });
+
+                const data = await response.json();
+
+                let html = `
+                    <div class="answer">
+                        <div class="answer-text">${data.resposta}</div>
+                        <div class="result-meta">
+                            <span>⏱️ ${data.tempo_processamento_ms ? Math.round(data.tempo_processamento_ms) : 0}ms</span>
+                            <span>📚 ${data.fontes ? data.fontes.length : 0} fontes</span>
+                        </div>
+                    </div>
+                `;
+
+                if (data.fontes && data.fontes.length > 0) {
+                    html += '<div class="sources"><div class="sources-title">📖 Fontes:</div>';
+                    data.fontes.forEach((fonte, idx) => {
+                        html += `
+                            <div class="result-item">
+                                <div class="result-title">${idx + 1}. ${fonte.title}</div>
+                                <div class="result-content">${fonte.content.substring(0, 200)}...</div>
+                                <div class="result-meta">
+                                    <span>Score: ${fonte.score ? fonte.score.toFixed(3) : 'N/A'}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            }
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchQuery').value;
+            const limit = document.getElementById('searchLimit').value;
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (!query.trim()) {
+                resultsDiv.innerHTML = '<div class="error">Por favor, digite um termo de busca.</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/buscar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, limit: parseInt(limit) })
+                });
+
+                const data = await response.json();
+
+                if (!data.resultados || data.resultados.length === 0) {
+                    resultsDiv.innerHTML = '<div class="error">Nenhum resultado encontrado.</div>';
+                    return;
+                }
+
+                let html = '<div class="results">';
+                data.resultados.forEach((result, idx) => {
+                    html += `
+                        <div class="result-item">
+                            <div class="result-title">${idx + 1}. ${result.title}</div>
+                            <div class="result-content">${result.content.substring(0, 300)}...</div>
+                            <div class="result-meta">
+                                <span>Score: ${result.score ? result.score.toFixed(3) : 'N/A'}</span>
+                                ${result.url ? `<a href="${result.url}" target="_blank">🔗 Ver artigo</a>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            }
+        }
+
+        async function addArticle() {
+            const title = document.getElementById('articleTitle').value;
+            const resultsDiv = document.getElementById('addResults');
+
+            if (!title.trim()) {
+                resultsDiv.innerHTML = '<div class="error">Por favor, digite o título do artigo.</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Adicionando artigo...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/adicionar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ titulo: title })
+                });
+
+                const data = await response.json();
+
+                if (data.sucesso) {
+                    resultsDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Artigo adicionado com sucesso!<br>
+                            Chunks criados: ${data.chunks_adicionados || 0}
+                        </div>
+                    `;
+                    loadStats(); // Atualizar estatísticas
+                } else {
+                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.mensagem || 'Falha ao adicionar artigo'}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            }
+        }
+
+        // Permitir Enter para buscar/perguntar
+        document.getElementById('searchQuery').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        document.getElementById('question').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) askQuestion();
+        });
+    </script>
+</body>
+</html>

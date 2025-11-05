@@ -1,0 +1,30 @@
+# FastAPI e servidor web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Banco de dados vetorial
+qdrant-client==1.12.1
+
+# Ollama básico
+ollama==0.3.2
+
+# LangChain para processamento de documentos
+langchain==0.1.0
+langchain-community==0.0.13
+langchain-core==0.1.23
+sentence-transformers==2.2.2
+
+# Processamento XML básico
+lxml==4.9.3
+beautifulsoup4==4.12.2
+
+# Utilities básicas
+python-dotenv==1.0.0
+tqdm==4.67.1
+requests==2.32.5
+httpx==0.27.2
+
+# Monitoring
+rich==13.7.1
+psutil==5.9.8

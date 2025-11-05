@@ -16,29 +16,7 @@ services:
       - offline_wikipedia_network
     restart: unless-stopped
 
-  # Servidor Ollama para LLM local
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama_server
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_models:/root/.ollama
-    environment:
-      - OLLAMA_MODELS=/root/.ollama/models
-    networks:
-      - offline_wikipedia_network
-    restart: unless-stopped
-    # Para GPU (descomente se tiver GPU NVIDIA)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
-  # Aplicação FastAPI Offline
+  # Aplicação FastAPI com LangChain
   app:
     build: .
     container_name: offline_wikipedia_app
@@ -46,9 +24,7 @@ services:
       - "9000:9000"
     depends_on:
       - qdrant
-      - ollama
     volumes:
-      - .:/app
       - ./data:/app/data  # Para dumps XML e cache
     working_dir: /app
     command: uvicorn api.wikipediaFuncionalAPI:app --host 0.0.0.0 --port 9000 --reload
@@ -57,12 +33,6 @@ services:
       - QDRANT_PORT=6333
       - DATA_DIR=/app/data
       - EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
-      - LLM_TYPE=ollama
-      - LLM_MODEL=phi3:mini
-      - LLM_MAX_TOKENS=512
-      - LLM_TEMPERATURE=0.3
-      - OLLAMA_HOST=ollama
-      - OLLAMA_PORT=11434
       - PYTHONPATH=/app
     networks:
       - offline_wikipedia_network
@@ -70,7 +40,6 @@ services:
 
 volumes:
   qdrant_storage:
-  ollama_models:
 
 networks:
   offline_wikipedia_network:

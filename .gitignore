@@ -111,45 +111,61 @@ ENV/
 env.bak/
 venv.bak/
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# Wikipedia Offline Data
+data/
+cache/
+*.xml
+*.xml.bz2
+*.xml.gz
+*.dump
+*.dump.bz2
 
-# Rope project settings
-.ropeproject
+# Local Models
+models/
+.ollama/
 
-# mkdocs documentation
-/site
+# Sentence Transformers cache
+.cache/
+sentence_transformers/
+huggingface/
+.huggingface/
+transformers_cache/
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Qdrant data
+qdrant_storage/
+qdrant/
+.qdrant/
 
-# Pyre type checker
-.pyre/
+# Docker volumes data
+*_data/
+*_storage/
 
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
+# IDE
+.vscode/
 .idea/
-
-# Docker
-.dockerignore
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Qdrant data
-qdrant_storage/
+# Logs
+*.log
+logs/
 
-# Sentence Transformers cache
-.cache/
+# Temporary files
+tmp/
+temp/
+*.tmp
 
-# Model cache
-models/
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Test files
+test_*.py
+*_test.py
