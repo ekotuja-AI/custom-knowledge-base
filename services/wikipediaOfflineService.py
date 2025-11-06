@@ -69,7 +69,7 @@ class WikipediaOfflineService:
         self.collection_name = "wikipedia_offline"
         self.ollama_host = os.getenv("OLLAMA_HOST", "ollama")
         self.ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
-        self.model_name = os.getenv("LLM_MODEL", "phi3:mini")
+        self.model_name = os.getenv("LLM_MODEL", "qwen2.5:7b")
         self._initialized = False
         
     def inicializar(self):
@@ -631,12 +631,19 @@ class WikipediaOfflineService:
                 context = context[:max_context_length] + "...\n[Contexto truncado para melhor performance]"
                 logger.info(f"📝 Contexto truncado para {max_context_length} caracteres")
             
-            prompt = f"""Baseando-se apenas nas informações fornecidas abaixo, responda à pergunta de forma clara e concisa.
+            prompt = f"""Você é um assistente especializado em responder perguntas com base em documentos da Wikipedia.
 
-Contexto:
+Contexto relevante da Wikipedia:
 {context}
 
 Pergunta: {question}
+
+Instruções:
+- Use as informações do contexto acima para responder
+- Se o contexto contém informações parcialmente relacionadas, use seu conhecimento geral para complementar
+- Seja claro, conciso e informativo
+- Se não houver informação suficiente, responda com base no que você sabe sobre o tema
+- Cite quando possível de onde vem a informação
 
 Resposta:"""
 
@@ -648,11 +655,12 @@ Resposta:"""
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.2,  # Reduzido para resposta mais focada
-                    "top_p": 0.8,        # Reduzido para resposta mais determinística
-                    "max_tokens": 300,   # Reduzido para resposta mais rápida
-                    "num_ctx": 4096,     # Contexto máximo
-                    "repeat_penalty": 1.1
+                    "temperature": 0.7,  # Aumentado para respostas mais criativas e completas
+                    "top_p": 0.9,        # Aumentado para mais diversidade
+                    "max_tokens": 512,   # Aumentado para respostas mais detalhadas
+                    "num_ctx": 8192,     # Aumentado - qwen2.5 suporta até 128K
+                    "repeat_penalty": 1.1,
+                    "top_k": 40
                 }
             }
             

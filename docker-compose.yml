@@ -58,9 +58,9 @@ services:
       - DATA_DIR=/app/data
       - EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
       - LLM_TYPE=ollama
-      - LLM_MODEL=phi3:mini
+      - LLM_MODEL=qwen2.5:7b
       - LLM_MAX_TOKENS=512
-      - LLM_TEMPERATURE=0.3
+      - LLM_TEMPERATURE=0.7
       - OLLAMA_HOST=ollama
       - OLLAMA_PORT=11434
       - PYTHONPATH=/app
