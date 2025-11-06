@@ -30,12 +30,21 @@ from .models import (
     StatusResponse
 )
 
-# Inicializa o serviço WikipediaOfflineService ao iniciar o app
-wikipedia_offline_service.inicializar()
+# Lifecycle management
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("🚀 Inicializando serviços...")
+    wikipedia_offline_service.inicializar()
+    logger.info("✅ Serviços inicializados!")
+    yield
+    # Shutdown
+    logger.info("👋 Encerrando serviços...")
 
 # Definição do objeto FastAPI
 app = FastAPI(
     title="Wikipedia Offline Vector Search API - Funcional",
+    lifespan=lifespan,
     description="API offline para Wikipedia com LLM local.\n\n### 🤖 RAG com LLM Local\n- Perguntas respondidas pelo modelo Phi-3 Mini\n- Respostas baseadas em artigos da Wikipedia\n- Sistema completamente offline\n\n### 📚 Gestão de Conteúdo\n- Adicione artigos da Wikipedia à base local\n- Processamento automático em chunks\n- Armazenamento no Qdrant\n\n## 🛠️ Stack Tecnológica\n- Qdrant: Banco vetorial para busca semântica\n- Ollama + Phi-3: LLM local para respostas\n- FastAPI: API REST moderna\n- Wikipedia API: Fonte de dados\n\n## 🚀 Como Usar\n1. Use /adicionar para incluir artigos da Wikipedia\n2. Use /buscar para encontrar conteúdo relevante\n3. Use /perguntar para fazer perguntas com RAG",
     version="2.0.0-funcional",
     docs_url="/docs",

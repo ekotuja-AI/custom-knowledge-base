@@ -143,11 +143,16 @@ class SearchResult:
 class QdrantRetriever(BaseRetriever):
     """Retriever personalizado para Qdrant com LangChain"""
     
+    qdrant_client: Any
+    collection_name: str
+    embedding_model: Any
+    
     def __init__(self, qdrant_client: QdrantClient, collection_name: str, embedding_model: SentenceTransformer):
-        super().__init__()
-        self.qdrant_client = qdrant_client
-        self.collection_name = collection_name
-        self.embedding_model = embedding_model
+        super().__init__(
+            qdrant_client=qdrant_client,
+            collection_name=collection_name,
+            embedding_model=embedding_model
+        )
     
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun, **kwargs
@@ -445,25 +450,36 @@ class LangChainWikipediaService:
         if not self._initialized:
             raise Exception("Serviço não inicializado")
         
+        if self.embedding_model is None:
+            logger.error("❌ Embedding model não inicializado")
+            return []
+        
         try:
             logger.info(f"🔍 Buscando: '{query}' (limit={limit}, threshold={score_threshold})")
             
-            # Usar o retriever LangChain
-            documents = self.retriever._get_relevant_documents(
-                query=query,
+            # Gerar embedding da query diretamente
+            query_vector = self.embedding_model.encode(query).tolist()
+            
+            # Buscar no Qdrant diretamente
+            search_result = self.qdrant_client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
                 limit=limit,
                 score_threshold=score_threshold
             )
             
             # Converter para SearchResult
             results = []
-            for doc in documents:
+            for hit in search_result:
                 result = SearchResult(
-                    title=doc.metadata.get('title', ''),
-                    content=doc.page_content,
-                    url=doc.metadata.get('url', ''),
-                    score=doc.metadata.get('score', 0.0),
-                    metadata=doc.metadata
+                    title=hit.payload.get('title', ''),
+                    content=hit.payload.get('content', ''),
+                    url=hit.payload.get('url', ''),
+                    score=hit.score,
+                    metadata={
+                        'chunk_index': hit.payload.get('chunk_index', 0),
+                        'total_chunks': hit.payload.get('total_chunks', 1)
+                    }
                 )
                 results.append(result)
             
