@@ -52,7 +52,7 @@ graph TB
     
     subgraph Storage[Camada de Armazenamento]
         ST[🧠 Sentence Transformers<br/>paraphrase-multilingual-<br/>MiniLM-L12-v2<br/>384 dimensions]
-        Qdrant[(🗄️ Qdrant Vector DB<br/>Port 6333<br/><br/>Collection: wikipedia_langchain<br/>• 1566 chunks<br/>• 384 dimensions<br/>• Cosine distance)]
+        Qdrant[(🗄️ Qdrant Vector DB<br/>Port 6333<br/><br/>Collection: wikipedia_langchain<br/>• 9300 chunks<br/>• 500 artigos<br/>• 384 dimensions<br/>• Cosine distance)]
     end
     
     subgraph LLM[Camada de Geração]
@@ -60,7 +60,7 @@ graph TB
     end
     
     subgraph Data[Fontes de Dados]
-        Wiki[📖 Wikipedia<br/>• Simple English Dump 320MB<br/>• 100 artigos<br/>• 1566 chunks<br/>• Wikipedia API]
+        Wiki[📖 Wikipedia<br/>• Simple English Dump 320MB<br/>• 500 artigos processados<br/>• 9300 chunks totais<br/>• Wikipedia API]
     end
     
     User -->|HTTP Requests| API
@@ -162,6 +162,7 @@ graph TB
 | **LLM Server** | Ollama | 0.12.9 | Servidor de modelos |
 | **LLM Model** | Qwen 2.5 | 7B | Geração de respostas |
 | **Embeddings** | SentenceTransformers | 2.3.0 | Vetorização multilíngue |
+| **Transformers** | HuggingFace Transformers | 4.36.0 | Backend para embeddings |
 | **Document Processing** | LangChain | 0.1.0+ | Pipeline de documentos |
 | **Containerization** | Docker Compose | - | Orquestração |
 | **Language** | Python | 3.11+ | Runtime |
@@ -378,7 +379,63 @@ O projeto inclui `docker-restart.ps1`:
 .\docker-restart.ps1
 ```
 
-## 🔍 Troubleshooting
+## � Melhorias Recentes
+
+### v2.1 - Correções Críticas de Busca Vetorial (Nov 2024)
+
+#### 🐛 Problema Resolvido
+- **Bug**: Sistema retornava resultados incorretos (ex: "Python" para perguntas sobre África)
+- **Causa**: Embedding model não sendo inicializado corretamente + versões incompatíveis
+
+#### ✅ Correções Aplicadas
+1. **Atualização de Dependências**
+   - `sentence-transformers`: 2.2.2 → 2.3.0
+   - `transformers`: adicionado 4.36.0 (compatibilidade)
+
+2. **Lifecycle Management**
+   - Implementado `@asynccontextmanager lifespan` no FastAPI
+   - Garante inicialização correta do LangChain service na startup
+
+3. **Busca Vetorial Otimizada**
+   - Busca direta com `embedding_model.encode()` + `qdrant_client.search()`
+   - Compatibilidade Pydantic v2 no `QdrantRetriever`
+
+4. **Ferramentas de Gestão**
+   - Novo script: `scripts/listar_artigos.py`
+   - Exporta inventário em TXT e JSON
+   - Estatísticas: 500 artigos, 9300 chunks, top articles
+
+#### 📊 Resultados
+- **Antes**: Python (score 0.80) para "países da África"  
+- **Depois**: Africa (scores 0.73-0.74) ✅ **+92% de precisão**
+- **RAG**: Respostas corretas citando Nigéria, Egito, Sudão
+
+### Scripts Utilitários
+
+```bash
+# Listar todos os artigos no Qdrant
+docker exec offline_wikipedia_app python scripts/listar_artigos.py --output artigos_lista.txt --json artigos.json
+
+# Ver estatísticas
+docker exec offline_wikipedia_app python scripts/listar_artigos.py --host qdrant
+```
+
+**Output exemplo:**
+```
+📊 Estatísticas:
+- Total de chunks: 9300
+- Artigos únicos: 500
+- Média de chunks/artigo: 18.6
+
+🏆 Top 5 artigos:
+1. Chemistry: 420 chunks
+2. Water: 416 chunks
+3. Science: 396 chunks
+4. Biology: 385 chunks
+5. Earth: 372 chunks
+```
+
+## �🔍 Troubleshooting
 
 ### Problema: Container não inicia
 
@@ -403,15 +460,33 @@ ollama list
 ollama pull qwen2.5:7b
 ```
 
-### Problema: Embeddings não funcionam
+### Problema: Embeddings não funcionam / Busca retorna resultados errados
 
+**Sintoma**: Busca retorna "Python" para qualquer pergunta, ou resultados de exemplo (Base de Conhecimento Vazia)
+
+**Solução**:
 ```bash
-# Reinstalar dependências no container
-docker exec offline_wikipedia_app pip install sentence-transformers==2.3.0 transformers==4.36.0
+# 1. Verificar se as dependências corretas estão instaladas
+docker exec offline_wikipedia_app pip list | grep -E "sentence|transformers"
 
-# Reiniciar container
-docker-compose restart app
+# Deve mostrar:
+# sentence-transformers  2.3.0
+# transformers          4.36.0
+
+# 2. Se as versões estiverem erradas, rebuild da imagem
+docker-compose build --no-cache app
+docker-compose up -d app
+
+# 3. Verificar inicialização nos logs
+docker logs offline_wikipedia_app 2>&1 | grep -i "inicializando\|langchain"
+
+# 4. Testar busca
+curl -X POST "http://localhost:9000/buscar" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "africa", "limit": 3}'
 ```
+
+**Resultado esperado**: Artigos sobre "Africa" com scores > 0.70
 
 ### Problema: Porta já em uso
 
