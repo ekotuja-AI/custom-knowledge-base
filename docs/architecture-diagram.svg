@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <style>
+      .box { fill: #fff; stroke: #333; stroke-width: 2; }
+      .user-box { fill: #9b59b6; stroke: #8e44ad; }
+      .api-box { fill: #3498db; stroke: #2980b9; }
+      .process-box { fill: #1abc9c; stroke: #16a085; }
+      .storage-box { fill: #e74c3c; stroke: #c0392b; }
+      .llm-box { fill: #f39c12; stroke: #d68910; }
+      .data-box { fill: #95a5a6; stroke: #7f8c8d; }
+      .text { font-family: Arial, sans-serif; font-size: 14px; fill: #fff; text-anchor: middle; }
+      .text-dark { fill: #333; }
+      .small-text { font-size: 11px; }
+      .title-text { font-size: 16px; font-weight: bold; }
+      .arrow { fill: none; stroke: #333; stroke-width: 2; marker-end: url(#arrowhead); }
+      .bi-arrow { fill: none; stroke: #333; stroke-width: 2; marker-end: url(#arrowhead); marker-start: url(#arrowhead-reverse); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#333"/>
+    </marker>
+    <marker id="arrowhead-reverse" markerWidth="10" markerHeight="10" refX="1" refY="3" orient="auto">
+      <polygon points="10 0, 0 3, 10 6" fill="#333"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="30" class="text text-dark title-text">Sistema RAG Offline - Arquitetura</text>
+
+  <!-- User / Interface -->
+  <rect x="400" y="60" width="400" height="80" rx="10" class="user-box"/>
+  <text x="600" y="90" class="text title-text">👤 USUÁRIO / INTERFACE WEB</text>
+  <text x="600" y="115" class="text">http://localhost:9000</text>
+
+  <!-- API Layer -->
+  <rect x="350" y="180" width="500" height="120" rx="10" class="api-box"/>
+  <text x="600" y="210" class="text title-text">⚡ FastAPI REST API (Port 9000)</text>
+  <text x="450" y="240" class="text small-text">GET / → Interface</text>
+  <text x="450" y="260" class="text small-text">POST /buscar → Busca</text>
+  <text x="750" y="240" class="text small-text">POST /perguntar → RAG</text>
+  <text x="750" y="260" class="text small-text">POST /adicionar → Artigos</text>
+  <text x="600" y="285" class="text small-text">GET /estatisticas → Métricas</text>
+
+  <!-- Processing Layer -->
+  <g>
+    <!-- LangChain -->
+    <rect x="100" y="340" width="280" height="120" rx="10" class="process-box"/>
+    <text x="240" y="370" class="text title-text">🔗 LangChain</text>
+    <text x="240" y="395" class="text small-text">• TextSplitter</text>
+    <text x="240" y="415" class="text small-text">• Document Loader</text>
+    <text x="240" y="435" class="text small-text">• Retriever</text>
+    <text x="240" y="455" class="text small-text">• Embeddings</text>
+
+    <!-- Wikipedia Service -->
+    <rect x="420" y="340" width="280" height="120" rx="10" class="process-box"/>
+    <text x="560" y="370" class="text title-text">📚 Wikipedia Service</text>
+    <text x="560" y="395" class="text small-text">• Busca híbrida</text>
+    <text x="560" y="415" class="text small-text">• RAG Pipeline</text>
+    <text x="560" y="435" class="text small-text">• Cache management</text>
+    <text x="560" y="455" class="text small-text">• Fallback strategies</text>
+  </g>
+
+  <!-- Storage Layer -->
+  <g>
+    <!-- Sentence Transformers -->
+    <rect x="100" y="500" width="280" height="100" rx="10" class="storage-box"/>
+    <text x="240" y="530" class="text title-text">🧠 Sentence Transformers</text>
+    <text x="240" y="555" class="text small-text">paraphrase-multilingual-</text>
+    <text x="240" y="575" class="text small-text">MiniLM-L12-v2 (384d)</text>
+
+    <!-- Qdrant -->
+    <rect x="420" y="500" width="280" height="100" rx="10" class="storage-box"/>
+    <text x="560" y="530" class="text title-text">🗄️ Qdrant Vector DB (6333)</text>
+    <text x="560" y="555" class="text small-text">Collection: wikipedia_langchain</text>
+    <text x="560" y="575" class="text small-text">1566 chunks • 384d • Cosine</text>
+  </g>
+
+  <!-- LLM Layer -->
+  <rect x="750" y="340" width="400" height="260" rx="10" class="llm-box"/>
+  <text x="950" y="370" class="text title-text">🤖 Ollama LLM Server (11434)</text>
+  <text x="950" y="400" class="text small-text">Model: qwen2.5:7b (4.7 GB)</text>
+  <text x="950" y="425" class="text small-text">• 7B parâmetros</text>
+  <text x="950" y="445" class="text small-text">• Tool calling nativo</text>
+  <text x="950" y="465" class="text small-text">• 128K context tokens</text>
+  <text x="950" y="485" class="text small-text">• Q4_0 quantization</text>
+  <text x="950" y="505" class="text small-text">• Multilíngue (PT/EN/ES/ZH)</text>
+  <line x1="750" y1="520" x2="1150" y2="520" stroke="#fff" stroke-width="1"/>
+  <text x="950" y="545" class="text small-text">Config: temp=0.7, top_p=0.9</text>
+  <text x="950" y="565" class="text small-text">max_tokens=512, ctx=8192</text>
+
+  <!-- Data Sources -->
+  <rect x="50" y="640" width="280" height="100" rx="10" class="data-box"/>
+  <text x="190" y="670" class="text title-text">📖 Wikipedia Data</text>
+  <text x="190" y="695" class="text small-text">Simple English Dump (320MB)</text>
+  <text x="190" y="715" class="text small-text">100 artigos • 1566 chunks</text>
+
+  <!-- Arrows -->
+  <!-- User to API -->
+  <path d="M 600 140 L 600 180" class="arrow"/>
+  
+  <!-- API to Processing -->
+  <path d="M 450 300 L 240 340" class="arrow"/>
+  <path d="M 650 300 L 560 340" class="arrow"/>
+  
+  <!-- Processing bidirectional -->
+  <path d="M 380 400 L 420 400" class="bi-arrow"/>
+  
+  <!-- Processing to Storage -->
+  <path d="M 240 460 L 240 500" class="arrow"/>
+  <path d="M 560 460 L 560 500" class="arrow"/>
+  
+  <!-- Sentence Transformers to Qdrant -->
+  <path d="M 380 550 L 420 550" class="arrow"/>
+  
+  <!-- Qdrant to Wiki Service -->
+  <path d="M 560 500 L 560 460" class="arrow"/>
+  
+  <!-- Wiki Service to Ollama -->
+  <path d="M 700 400 L 750 470" class="arrow"/>
+  
+  <!-- Data to LangChain -->
+  <path d="M 190 640 L 190 460" class="arrow"/>
+
+  <!-- Legend -->
+  <g transform="translate(750, 640)">
+    <text x="0" y="0" class="text-dark small-text" text-anchor="start" font-weight="bold">Legenda:</text>
+    <rect x="0" y="10" width="30" height="15" rx="2" class="user-box"/>
+    <text x="35" y="22" class="text-dark small-text" text-anchor="start">Usuário</text>
+    
+    <rect x="100" y="10" width="30" height="15" rx="2" class="api-box"/>
+    <text x="135" y="22" class="text-dark small-text" text-anchor="start">API</text>
+    
+    <rect x="180" y="10" width="30" height="15" rx="2" class="process-box"/>
+    <text x="215" y="22" class="text-dark small-text" text-anchor="start">Processing</text>
+    
+    <rect x="0" y="35" width="30" height="15" rx="2" class="storage-box"/>
+    <text x="35" y="47" class="text-dark small-text" text-anchor="start">Storage</text>
+    
+    <rect x="100" y="35" width="30" height="15" rx="2" class="llm-box"/>
+    <text x="135" y="47" class="text-dark small-text" text-anchor="start">LLM</text>
+    
+    <rect x="180" y="35" width="30" height="15" rx="2" class="data-box"/>
+    <text x="215" y="47" class="text-dark small-text" text-anchor="start">Data</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="600" y="780" class="text-dark small-text">Sistema RAG Offline - Wikipedia + LangChain + Ollama - 2025</text>
+</svg>

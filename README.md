@@ -30,109 +30,127 @@ Um sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que 
 
 ### Diagrama de Componentes
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         USUÁRIO / INTERFACE WEB                      │
-│                         http://localhost:9000                         │
-└────────────────────────────────┬────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                          FASTAPI REST API                            │
-│                         (Port 9000)                                  │
-│                                                                       │
-│  Endpoints:                                                          │
-│  • GET  /              → Interface Web                               │
-│  • POST /buscar        → Busca semântica                            │
-│  • POST /perguntar     → RAG com LLM                                │
-│  • POST /adicionar     → Novos artigos                              │
-│  • GET  /estatisticas  → Métricas do sistema                        │
-└────────┬──────────────────────────────────────┬─────────────────────┘
-         │                                       │
-         │                                       │
-         ▼                                       ▼
-┌─────────────────────┐            ┌──────────────────────────────────┐
-│   LANGCHAIN         │            │   WIKIPEDIA OFFLINE SERVICE      │
-│   (Processing)      │            │   (Orquestração)                 │
-│                     │            │                                  │
-│ • TextSplitter      │            │ • Busca híbrida                  │
-│ • Document Loader   │            │ • RAG Pipeline                   │
-│ • Retriever         │◄──────────►│ • Cache management               │
-│ • Embeddings        │            │ • Fallback strategies            │
-└──────┬──────────────┘            └────────┬─────────────────────────┘
-       │                                     │
-       │                                     │
-       ▼                                     ▼
-┌─────────────────────┐            ┌──────────────────────────────────┐
-│  SENTENCE           │            │   QDRANT VECTOR DATABASE         │
-│  TRANSFORMERS       │            │   (Port 6333)                    │
-│                     │            │                                  │
-│ Model:              │            │ Collection: wikipedia_langchain  │
-│ paraphrase-         │───────────►│ • 1566 chunks                    │
-│ multilingual-       │  Vectors   │ • 384 dimensions                 │
-│ MiniLM-L12-v2       │  (384d)    │ • Cosine distance                │
-│                     │            │ • Persistent storage             │
-└─────────────────────┘            └──────────────────────────────────┘
-                                              │
-                                              │
-┌─────────────────────────────────────────────┼─────────────────────┐
-│                                             ▼                       │
-│                        OLLAMA LLM SERVER                            │
-│                        (Port 11434)                                 │
-│                                                                     │
-│  Modelo Ativo: qwen2.5:7b (4.7 GB)                                │
-│  • 7 bilhões de parâmetros                                         │
-│  • Tool calling nativo                                             │
-│  • Contexto: 128K tokens                                           │
-│  • Quantização: Q4_0                                               │
-│  • Multilíngue (PT, EN, ES, ZH)                                    │
-│                                                                     │
-│  Configurações:                                                     │
-│  • temperature: 0.7                                                 │
-│  • top_p: 0.9                                                       │
-│  • max_tokens: 512                                                  │
-│  • num_ctx: 8192                                                    │
-└─────────────────────────────────────────────────────────────────────┘
+<div align="center">
+  <img src="docs/architecture-diagram.svg" alt="Arquitetura do Sistema RAG" width="100%"/>
+</div>
 
-┌─────────────────────────────────────────────────────────────────────┐
-│                     FONTES DE DADOS                                  │
-│                                                                       │
-│  • Wikipedia Simple English Dump (320 MB)                           │
-│  • 100 artigos processados                                          │
-│  • 1566 chunks vetorizados                                          │
-│  • Wikipedia API (para expansão)                                    │
-└─────────────────────────────────────────────────────────────────────┘
+<details>
+<summary>📊 Ver diagrama Mermaid interativo (clique para expandir)</summary>
+
+```mermaid
+graph TB
+    User[👤 USUÁRIO<br/>Interface Web<br/>localhost:9000]
+    
+    subgraph API[FastAPI REST API - Port 9000]
+        Routes[Endpoints:<br/>GET / - Interface<br/>POST /buscar - Busca<br/>POST /perguntar - RAG<br/>POST /adicionar - Novos artigos<br/>GET /estatisticas - Métricas]
+    end
+    
+    subgraph Processing[Camada de Processamento]
+        LangChain[🔗 LangChain<br/>• TextSplitter<br/>• Document Loader<br/>• Retriever<br/>• Embeddings]
+        WikiService[📚 Wikipedia Service<br/>• Busca híbrida<br/>• RAG Pipeline<br/>• Cache management<br/>• Fallback strategies]
+    end
+    
+    subgraph Storage[Camada de Armazenamento]
+        ST[🧠 Sentence Transformers<br/>paraphrase-multilingual-<br/>MiniLM-L12-v2<br/>384 dimensions]
+        Qdrant[(🗄️ Qdrant Vector DB<br/>Port 6333<br/><br/>Collection: wikipedia_langchain<br/>• 1566 chunks<br/>• 384 dimensions<br/>• Cosine distance)]
+    end
+    
+    subgraph LLM[Camada de Geração]
+        Ollama[🤖 Ollama LLM Server<br/>Port 11434<br/><br/>Model: qwen2.5:7b 4.7GB<br/>• 7B parâmetros<br/>• Tool calling<br/>• 128K context<br/>• Q4_0 quantization<br/><br/>Config:<br/>temp=0.7, top_p=0.9<br/>max_tokens=512, ctx=8192]
+    end
+    
+    subgraph Data[Fontes de Dados]
+        Wiki[📖 Wikipedia<br/>• Simple English Dump 320MB<br/>• 100 artigos<br/>• 1566 chunks<br/>• Wikipedia API]
+    end
+    
+    User -->|HTTP Requests| API
+    API --> LangChain
+    API --> WikiService
+    LangChain <-->|Documents| WikiService
+    WikiService --> ST
+    ST -->|Vectors 384d| Qdrant
+    WikiService -->|Context| Ollama
+    Qdrant -->|Retrieval| WikiService
+    Data -->|Ingest| LangChain
+    
+    classDef userClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+    classDef apiClass fill:#3498db,stroke:#2980b9,color:#fff
+    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+    classDef storageClass fill:#e74c3c,stroke:#c0392b,color:#fff
+    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
+    classDef dataClass fill:#95a5a6,stroke:#7f8c8d,color:#fff
+    
+    class User userClass
+    class API,Routes apiClass
+    class LangChain,WikiService processClass
+    class ST,Qdrant storageClass
+    class Ollama llmClass
+    class Wiki dataClass
 ```
+
+</details>
+
 
 ### Fluxo de Dados
 
 #### 1️⃣ **Ingestão de Documentos**
-```
-Wikipedia Dump → Parser → LangChain TextSplitter → SentenceTransformers
-                                                            ↓
-                                                      Embeddings (384d)
-                                                            ↓
-                                                    Qdrant Vector DB
+
+```mermaid
+graph LR
+    A[📥 Wikipedia Dump<br/>320MB] --> B[🔍 Parser]
+    B --> C[✂️ LangChain<br/>TextSplitter]
+    C --> D[🧠 Sentence<br/>Transformers]
+    D --> E[📊 Embeddings<br/>384 dimensions]
+    E --> F[(🗄️ Qdrant<br/>Vector DB)]
+    
+    classDef inputClass fill:#3498db,stroke:#2980b9,color:#fff
+    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+    classDef outputClass fill:#e74c3c,stroke:#c0392b,color:#fff
+    
+    class A inputClass
+    class B,C,D,E processClass
+    class F outputClass
 ```
 
 #### 2️⃣ **Busca Semântica**
-```
-Query do Usuário → Embedding → Qdrant Search → Top K Documentos
-                                                      ↓
-                                              Ranking + Filtros
-                                                      ↓
-                                                 Resultados
+
+```mermaid
+graph LR
+    A[❓ Query do<br/>Usuário] --> B[🧠 Embedding<br/>Generator]
+    B --> C[(🔍 Qdrant<br/>Search)]
+    C --> D[📊 Top K<br/>Documentos]
+    D --> E[⚖️ Ranking +<br/>Filtros]
+    E --> F[✅ Resultados<br/>Relevantes]
+    
+    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+    classDef outputClass fill:#f39c12,stroke:#d68910,color:#fff
+    
+    class A inputClass
+    class B,C,D,E processClass
+    class F outputClass
 ```
 
 #### 3️⃣ **RAG (Retrieval-Augmented Generation)**
-```
-Pergunta → Busca Semântica → Top N Chunks → Contexto
-                                                ↓
-                                        Prompt Engineering
-                                                ↓
-                                    Ollama (Qwen 2.5 7B)
-                                                ↓
-                                      Resposta + Citações
+
+```mermaid
+graph TB
+    A[❓ Pergunta do<br/>Usuário] --> B[🔍 Busca<br/>Semântica]
+    B --> C[📚 Top N<br/>Chunks]
+    C --> D[📝 Construção<br/>de Contexto]
+    D --> E[✍️ Prompt<br/>Engineering]
+    E --> F[🤖 Ollama<br/>Qwen 2.5 7B]
+    F --> G[💬 Resposta +<br/>Citações]
+    
+    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
+    classDef outputClass fill:#27ae60,stroke:#229954,color:#fff
+    
+    class A inputClass
+    class B,C,D,E processClass
+    class F llmClass
+    class G outputClass
 ```
 
 ### Stack Tecnológico
