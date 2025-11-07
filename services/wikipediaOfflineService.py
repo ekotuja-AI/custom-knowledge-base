@@ -419,7 +419,7 @@ class WikipediaOfflineService:
                 langchain_results = langchain_wikipedia_service.buscar_documentos(
                     query=query, 
                     limit=limit,
-                    score_threshold=0.7
+                    score_threshold=0.5  # Ajustado para 0.5 - threshold mais permissivo
                 )
                 
                 if langchain_results:
@@ -574,7 +574,7 @@ class WikipediaOfflineService:
     def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3) -> RAGResponse:
         """Sistema RAG com Ollama"""
         try:
-            # Buscar documentos relevantes
+            # Buscar mais documentos para melhor contexto
             documentos = self.buscar_artigos(pergunta, limit=max_chunks)
             
             if not documentos:
@@ -588,18 +588,18 @@ class WikipediaOfflineService:
             
             logger.info(f"📚 Encontrou {len(documentos)} documentos para RAG")
             
-            # Preparar contexto otimizado (limitar cada documento a 400 caracteres)
+            # Preparar contexto com mais conteúdo por documento (600 chars)
             context_parts = []
             for i, doc in enumerate(documentos, 1):
-                # Truncar conteúdo para evitar contexto muito longo
-                content_snippet = doc.content[:400]
-                if len(doc.content) > 400:
+                # Usar mais conteúdo para respostas melhores
+                content_snippet = doc.content[:600]
+                if len(doc.content) > 600:
                     content_snippet += "..."
                 
-                context_parts.append(f"Documento {i} - {doc.title}:\n{content_snippet}")
+                context_parts.append(f"[FONTE {i}] {doc.title}:\n{content_snippet}")
             
             context = "\n\n".join(context_parts)
-            logger.info(f"📝 Contexto preparado com {len(context)} caracteres")
+            logger.info(f"📝 Contexto preparado com {len(context)} caracteres de {len(documentos)} fontes")
             
             # Gerar resposta com Ollama
             resposta = self._generate_answer_with_ollama(pergunta, context)
@@ -631,21 +631,28 @@ class WikipediaOfflineService:
                 context = context[:max_context_length] + "...\n[Contexto truncado para melhor performance]"
                 logger.info(f"📝 Contexto truncado para {max_context_length} caracteres")
             
-            prompt = f"""Você é um assistente especializado em responder perguntas com base em documentos da Wikipedia.
+            prompt = f"""Você é um assistente especializado em responder perguntas usando documentos da Wikipedia em inglês, mas SEMPRE respondendo em português brasileiro.
 
-Contexto relevante da Wikipedia:
+CONTEXTO DA WIKIPEDIA (pode estar em inglês):
 {context}
 
-Pergunta: {question}
+PERGUNTA: {question}
 
-Instruções:
-- Use as informações do contexto acima para responder
-- Se o contexto contém informações parcialmente relacionadas, use seu conhecimento geral para complementar
-- Seja claro, conciso e informativo
-- Se não houver informação suficiente, responda com base no que você sabe sobre o tema
-- Cite quando possível de onde vem a informação
+INSTRUÇÕES IMPORTANTES:
+1. Responda em PORTUGUÊS BRASILEIRO (mesmo que o contexto esteja em inglês)
+2. Use APENAS as informações do contexto acima para responder
+3. Cite trechos específicos do contexto na sua resposta
+4. Seja detalhado e informativo (mínimo 3-4 frases)
+5. Traduza termos técnicos e conceitos para português
+6. Estruture a resposta em parágrafos quando necessário
+7. Se o contexto não tiver informação suficiente, diga "Com base no contexto fornecido..." e explique o que foi encontrado
 
-Resposta:"""
+FORMATO DA RESPOSTA:
+- Comece respondendo diretamente a pergunta
+- Depois elabore com detalhes do contexto
+- Finalize com informação adicional relevante
+
+RESPOSTA EM PORTUGUÊS:"""
 
             logger.info(f"🤖 Enviando prompt para Ollama (tamanho: {len(prompt)} caracteres)")
             
@@ -655,12 +662,13 @@ Resposta:"""
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7,  # Aumentado para respostas mais criativas e completas
-                    "top_p": 0.9,        # Aumentado para mais diversidade
-                    "max_tokens": 512,   # Aumentado para respostas mais detalhadas
-                    "num_ctx": 8192,     # Aumentado - qwen2.5 suporta até 128K
-                    "repeat_penalty": 1.1,
-                    "top_k": 40
+                    "temperature": 0.8,      # Mais criativo para respostas detalhadas
+                    "top_p": 0.95,          # Maior diversidade vocabular
+                    "num_predict": 800,     # Respostas mais longas (até 800 tokens)
+                    "num_ctx": 8192,        # Contexto grande (qwen2.5 suporta muito)
+                    "repeat_penalty": 1.15, # Evitar repetições
+                    "top_k": 50,            # Mais opções de palavras
+                    "stop": ["\n\nPERGUNTA:", "\n\nCONTEXTO:"]  # Parar em nova seção
                 }
             }
             

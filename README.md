@@ -1,484 +1,965 @@
-# 📖 Sistema RAG Offline - Wikipedia + LangChain + Ollama
+# 🤖 Sistema RAG - Wikipedia + Qdrant + Ollama# 📖 Sistema RAG Offline - Wikipedia + LangChain + Ollama
 
-**Sistema completo de Retrieval-Augmented Generation (RAG) offline utilizando Wikipedia, LangChain e LLM local.**
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/downloads/)
-[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
-[![LangChain](https://img.shields.io/badge/LangChain-121212?style=for-the-badge)](https://langchain.com/)
 
-## 🎯 Visão Geral
+Sistema completo de **Retrieval-Augmented Generation (RAG)** usando Wikipedia, busca vetorial e LLM local.**Sistema completo de Retrieval-Augmented Generation (RAG) offline utilizando Wikipedia, LangChain e LLM local.**
 
-Um sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que combina:
+
+
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi)](https://fastapi.tiangolo.com/)[![Python](https://img.shields.io/badge/python-3.11+-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/downloads/)
+
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?logo=docker)](https://www.docker.com/)[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+
+[![Qdrant](https://img.shields.io/badge/Qdrant-DC244C)](https://qdrant.tech/)[![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
+
+[![Tests](https://img.shields.io/badge/tests-48%20passed-brightgreen)]()[![LangChain](https://img.shields.io/badge/LangChain-121212?style=for-the-badge)](https://langchain.com/)
+
+
+
+---## 🎯 Visão Geral
+
+
+
+## 🎯 O Que É Este Projeto?Um sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que combina:
+
 - 🌐 **Wikipedia** como base de conhecimento
-- 🔍 **Busca vetorial semântica** com Qdrant
+
+Um **assistente inteligente** que responde perguntas usando artigos da Wikipedia como base de conhecimento. Combina:- 🔍 **Busca vetorial semântica** com Qdrant
+
 - 🤖 **LLM local** (Qwen 2.5 7B) via Ollama
-- ⚡ **LangChain** para processamento de documentos
-- 🎨 **Interface web moderna** para consultas
 
-### ✨ Funcionalidades Principais
+- 🔍 **Busca Semântica**: Encontra informações por significado, não apenas palavras-chave- ⚡ **LangChain** para processamento de documentos
 
-- ✅ **Busca Semântica**: Encontra informações por similaridade, não apenas palavras-chave
+- 🤖 **IA Local (Ollama)**: Gera respostas inteligentes sem enviar dados para nuvem- 🎨 **Interface web moderna** para consultas
+
+- 📚 **Wikipedia**: Base de conhecimento rica e expansível
+
+- ⚡ **100% Offline**: Funciona sem internet após configuração inicial### ✨ Funcionalidades Principais
+
+
+
+### ✨ Funcionalidades- ✅ **Busca Semântica**: Encontra informações por similaridade, não apenas palavras-chave
+
 - ✅ **Perguntas Inteligentes**: Respostas contextualizadas usando LLM + conhecimento da Wikipedia
-- ✅ **100% Offline**: Funciona completamente sem internet após setup inicial
-- ✅ **Tool Calling**: Suporte nativo a function calling com Qwen 2.5
-- ✅ **Processamento em Lote**: Ingestão eficiente de dumps da Wikipedia
-- ✅ **Interface Web**: UI moderna com gradiente purple
 
-## 🏗️ Arquitetura
+- ✅ Busca semântica multilíngue (português/inglês)- ✅ **100% Offline**: Funciona completamente sem internet após setup inicial
 
-### Diagrama de Componentes
+- ✅ Respostas contextualizadas com RAG- ✅ **Tool Calling**: Suporte nativo a function calling com Qwen 2.5
 
-<div align="center">
+- ✅ Adicionar artigos da Wikipedia dinamicamente- ✅ **Processamento em Lote**: Ingestão eficiente de dumps da Wikipedia
+
+- ✅ Interface web moderna- ✅ **Interface Web**: UI moderna com gradiente purple
+
+- ✅ API REST completa
+
+- ✅ 48 testes unitários (100% passando)## 🏗️ Arquitetura
+
+
+
+---### Diagrama de Componentes
+
+
+
+## 🚀 Início Rápido (5 minutos)<div align="center">
+
   <img src="docs/architecture-diagram.svg" alt="Arquitetura do Sistema RAG" width="100%"/>
-</div>
 
-<details>
-<summary>📊 Ver diagrama Mermaid interativo (clique para expandir)</summary>
+### 1️⃣ Pré-requisitos</div>
+
+
+
+- **Docker** e **Docker Compose**<details>
+
+- 8GB+ RAM disponível<summary>📊 Ver diagrama Mermaid interativo (clique para expandir)</summary>
+
+- 20GB+ espaço em disco
 
 ```mermaid
-graph TB
+
+### 2️⃣ Instalaçãograph TB
+
     User[👤 USUÁRIO<br/>Interface Web<br/>localhost:9000]
+
+```bash    
+
+# Clone o repositório    subgraph API[FastAPI REST API - Port 9000]
+
+git clone https://github.com/ekotuja-AI/dicionario_vetorial.git        Routes[Endpoints:<br/>GET / - Interface<br/>POST /buscar - Busca<br/>POST /perguntar - RAG<br/>POST /adicionar - Novos artigos<br/>GET /estatisticas - Métricas]
+
+cd dicionario_vetorial    end
+
     
-    subgraph API[FastAPI REST API - Port 9000]
-        Routes[Endpoints:<br/>GET / - Interface<br/>POST /buscar - Busca<br/>POST /perguntar - RAG<br/>POST /adicionar - Novos artigos<br/>GET /estatisticas - Métricas]
-    end
-    
-    subgraph Processing[Camada de Processamento]
-        LangChain[🔗 LangChain<br/>• TextSplitter<br/>• Document Loader<br/>• Retriever<br/>• Embeddings]
+
+# Inicie os containers    subgraph Processing[Camada de Processamento]
+
+docker-compose up -d        LangChain[🔗 LangChain<br/>• TextSplitter<br/>• Document Loader<br/>• Retriever<br/>• Embeddings]
+
         WikiService[📚 Wikipedia Service<br/>• Busca híbrida<br/>• RAG Pipeline<br/>• Cache management<br/>• Fallback strategies]
-    end
-    
-    subgraph Storage[Camada de Armazenamento]
+
+# Aguarde ~2 minutos para inicialização completa    end
+
+docker logs -f offline_wikipedia_app    
+
+```    subgraph Storage[Camada de Armazenamento]
+
         ST[🧠 Sentence Transformers<br/>paraphrase-multilingual-<br/>MiniLM-L12-v2<br/>384 dimensions]
-        Qdrant[(🗄️ Qdrant Vector DB<br/>Port 6333<br/><br/>Collection: wikipedia_langchain<br/>• 9300 chunks<br/>• 500 artigos<br/>• 384 dimensions<br/>• Cosine distance)]
+
+### 3️⃣ Usar o Sistema        Qdrant[(🗄️ Qdrant Vector DB<br/>Port 6333<br/><br/>Collection: wikipedia_langchain<br/>• 9300 chunks<br/>• 500 artigos<br/>• 384 dimensions<br/>• Cosine distance)]
+
     end
-    
-    subgraph LLM[Camada de Geração]
-        Ollama[🤖 Ollama LLM Server<br/>Port 11434<br/><br/>Model: qwen2.5:7b 4.7GB<br/>• 7B parâmetros<br/>• Tool calling<br/>• 128K context<br/>• Q4_0 quantization<br/><br/>Config:<br/>temp=0.7, top_p=0.9<br/>max_tokens=512, ctx=8192]
+
+**Interface Web:**    
+
+- Abra: http://localhost:9000    subgraph LLM[Camada de Geração]
+
+- Faça buscas ou perguntas!        Ollama[🤖 Ollama LLM Server<br/>Port 11434<br/><br/>Model: qwen2.5:7b 4.7GB<br/>• 7B parâmetros<br/>• Tool calling<br/>• 128K context<br/>• Q4_0 quantization<br/><br/>Config:<br/>temp=0.7, top_p=0.9<br/>max_tokens=512, ctx=8192]
+
     end
-    
-    subgraph Data[Fontes de Dados]
-        Wiki[📖 Wikipedia<br/>• Simple English Dump 320MB<br/>• 500 artigos processados<br/>• 9300 chunks totais<br/>• Wikipedia API]
-    end
-    
-    User -->|HTTP Requests| API
+
+**Testar via API:**    
+
+```bash    subgraph Data[Fontes de Dados]
+
+# Buscar artigos        Wiki[📖 Wikipedia<br/>• Simple English Dump 320MB<br/>• 500 artigos processados<br/>• 9300 chunks totais<br/>• Wikipedia API]
+
+curl -X POST http://localhost:9000/buscar \    end
+
+  -H "Content-Type: application/json" \    
+
+  -d '{"query": "inteligência artificial", "limit": 5}'    User -->|HTTP Requests| API
+
     API --> LangChain
-    API --> WikiService
-    LangChain <-->|Documents| WikiService
-    WikiService --> ST
-    ST -->|Vectors 384d| Qdrant
-    WikiService -->|Context| Ollama
+
+# Fazer pergunta com RAG    API --> WikiService
+
+curl -X POST http://localhost:9000/perguntar \    LangChain <-->|Documents| WikiService
+
+  -H "Content-Type: application/json" \    WikiService --> ST
+
+  -d '{"pergunta": "O que é machine learning?", "max_chunks": 5}'    ST -->|Vectors 384d| Qdrant
+
+```    WikiService -->|Context| Ollama
+
     Qdrant -->|Retrieval| WikiService
-    Data -->|Ingest| LangChain
+
+---    Data -->|Ingest| LangChain
+
     
-    classDef userClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+
+## 📚 Documentação Completa    classDef userClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+
     classDef apiClass fill:#3498db,stroke:#2980b9,color:#fff
-    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+
+### 🏗️ Arquitetura    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+
     classDef storageClass fill:#e74c3c,stroke:#c0392b,color:#fff
-    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
-    classDef dataClass fill:#95a5a6,stroke:#7f8c8d,color:#fff
-    
-    class User userClass
-    class API,Routes apiClass
-    class LangChain,WikiService processClass
-    class ST,Qdrant storageClass
-    class Ollama llmClass
-    class Wiki dataClass
-```
 
-</details>
+```    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
 
+┌─────────────────────────────────────────────────────────────┐    classDef dataClass fill:#95a5a6,stroke:#7f8c8d,color:#fff
 
-### Fluxo de Dados
+│                     Interface Web (/)                        │    
 
-#### 1️⃣ **Ingestão de Documentos**
+│                    http://localhost:9000                     │    class User userClass
 
-```mermaid
-graph LR
-    A[📥 Wikipedia Dump<br/>320MB] --> B[🔍 Parser]
-    B --> C[✂️ LangChain<br/>TextSplitter]
-    C --> D[🧠 Sentence<br/>Transformers]
-    D --> E[📊 Embeddings<br/>384 dimensions]
+└──────────────────────┬──────────────────────────────────────┘    class API,Routes apiClass
+
+                       │    class LangChain,WikiService processClass
+
+                       ▼    class ST,Qdrant storageClass
+
+┌─────────────────────────────────────────────────────────────┐    class Ollama llmClass
+
+│                    FastAPI REST API                          │    class Wiki dataClass
+
+│  /buscar  /perguntar  /adicionar  /status  /estatisticas   │```
+
+└──────────────────┬──────────────────┬──────────────────────┘
+
+                   │                  │</details>
+
+         ┌─────────▼────────┐  ┌─────▼──────────┐
+
+         │  Qdrant Vector   │  │  Ollama LLM    │
+
+         │   Database       │  │  (qwen2.5:7b)  │### Fluxo de Dados
+
+         │  (embeddings)    │  │                │
+
+         └──────────────────┘  └────────────────┘#### 1️⃣ **Ingestão de Documentos**
+
+                   │
+
+         ┌─────────▼────────┐```mermaid
+
+         │  SentenceTransf. │graph LR
+
+         │  Embeddings      │    A[📥 Wikipedia Dump<br/>320MB] --> B[🔍 Parser]
+
+         │  (multilingual)  │    B --> C[✂️ LangChain<br/>TextSplitter]
+
+         └──────────────────┘    C --> D[🧠 Sentence<br/>Transformers]
+
+```    D --> E[📊 Embeddings<br/>384 dimensions]
+
     E --> F[(🗄️ Qdrant<br/>Vector DB)]
-    
+
+### 🔧 Componentes    
+
     classDef inputClass fill:#3498db,stroke:#2980b9,color:#fff
-    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
-    classDef outputClass fill:#e74c3c,stroke:#c0392b,color:#fff
-    
-    class A inputClass
-    class B,C,D,E processClass
-    class F outputClass
+
+| Componente | Tecnologia | Porta | Função |    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+
+|------------|-----------|-------|---------|    classDef outputClass fill:#e74c3c,stroke:#c0392b,color:#fff
+
+| **API** | FastAPI | 9000 | Endpoints REST |    
+
+| **Vector DB** | Qdrant | 6333 | Busca vetorial |    class A inputClass
+
+| **LLM** | Ollama (qwen2.5:7b) | 11434 | Geração de respostas |    class B,C,D,E processClass
+
+| **Embeddings** | paraphrase-multilingual-MiniLM-L12-v2 | - | Vetorização de texto |    class F outputClass
+
 ```
+
+### 📡 API Endpoints
 
 #### 2️⃣ **Busca Semântica**
 
-```mermaid
+#### **GET /** - Interface Web
+
+Interface visual para buscar e fazer perguntas.```mermaid
+
 graph LR
-    A[❓ Query do<br/>Usuário] --> B[🧠 Embedding<br/>Generator]
-    B --> C[(🔍 Qdrant<br/>Search)]
+
+#### **POST /buscar** - Busca Semântica    A[❓ Query do<br/>Usuário] --> B[🧠 Embedding<br/>Generator]
+
+Busca artigos por similaridade semântica.    B --> C[(🔍 Qdrant<br/>Search)]
+
     C --> D[📊 Top K<br/>Documentos]
-    D --> E[⚖️ Ranking +<br/>Filtros]
-    E --> F[✅ Resultados<br/>Relevantes]
-    
-    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
-    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
-    classDef outputClass fill:#f39c12,stroke:#d68910,color:#fff
-    
+
+**Request:**    D --> E[⚖️ Ranking +<br/>Filtros]
+
+```json    E --> F[✅ Resultados<br/>Relevantes]
+
+{    
+
+  "query": "inteligência artificial",    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+
+  "limit": 5    classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
+
+}    classDef outputClass fill:#f39c12,stroke:#d68910,color:#fff
+
+```    
+
     class A inputClass
-    class B,C,D,E processClass
-    class F outputClass
-```
 
-#### 3️⃣ **RAG (Retrieval-Augmented Generation)**
+**Response:**    class B,C,D,E processClass
 
-```mermaid
-graph TB
-    A[❓ Pergunta do<br/>Usuário] --> B[🔍 Busca<br/>Semântica]
-    B --> C[📚 Top N<br/>Chunks]
-    C --> D[📝 Construção<br/>de Contexto]
-    D --> E[✍️ Prompt<br/>Engineering]
-    E --> F[🤖 Ollama<br/>Qwen 2.5 7B]
-    F --> G[💬 Resposta +<br/>Citações]
-    
-    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+```json    class F outputClass
+
+{```
+
+  "query": "inteligência artificial",
+
+  "total_resultados": 5,#### 3️⃣ **RAG (Retrieval-Augmented Generation)**
+
+  "resultados": [
+
+    {```mermaid
+
+      "title": "Artificial Intelligence",graph TB
+
+      "content": "AI is...",    A[❓ Pergunta do<br/>Usuário] --> B[🔍 Busca<br/>Semântica]
+
+      "url": "https://...",    B --> C[📚 Top N<br/>Chunks]
+
+      "score": 0.89    C --> D[📝 Construção<br/>de Contexto]
+
+    }    D --> E[✍️ Prompt<br/>Engineering]
+
+  ],    E --> F[🤖 Ollama<br/>Qwen 2.5 7B]
+
+  "tempo_busca_ms": 45.2    F --> G[💬 Resposta +<br/>Citações]
+
+}    
+
+```    classDef inputClass fill:#9b59b6,stroke:#8e44ad,color:#fff
+
     classDef processClass fill:#1abc9c,stroke:#16a085,color:#fff
-    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
-    classDef outputClass fill:#27ae60,stroke:#229954,color:#fff
+
+#### **POST /perguntar** - RAG (Pergunta + Resposta)    classDef llmClass fill:#f39c12,stroke:#d68910,color:#fff
+
+Responde perguntas usando contexto da Wikipedia + LLM.    classDef outputClass fill:#27ae60,stroke:#229954,color:#fff
+
     
-    class A inputClass
-    class B,C,D,E processClass
-    class F llmClass
-    class G outputClass
-```
 
-### Stack Tecnológico
+**Request:**    class A inputClass
 
-| Componente | Tecnologia | Versão | Função |
-|------------|------------|--------|--------|
-| **API Framework** | FastAPI | 0.104+ | REST API assíncrona |
-| **Vector Database** | Qdrant | 1.11.3 | Armazenamento vetorial |
-| **LLM Server** | Ollama | 0.12.9 | Servidor de modelos |
-| **LLM Model** | Qwen 2.5 | 7B | Geração de respostas |
-| **Embeddings** | SentenceTransformers | 2.3.0 | Vetorização multilíngue |
-| **Transformers** | HuggingFace Transformers | 4.36.0 | Backend para embeddings |
-| **Document Processing** | LangChain | 0.1.0+ | Pipeline de documentos |
-| **Containerization** | Docker Compose | - | Orquestração |
+```json    class B,C,D,E processClass
+
+{    class F llmClass
+
+  "pergunta": "O que é machine learning?",    class G outputClass
+
+  "max_chunks": 5```
+
+}
+
+```### Stack Tecnológico
+
+
+
+**Response:**| Componente | Tecnologia | Versão | Função |
+
+```json|------------|------------|--------|--------|
+
+{| **API Framework** | FastAPI | 0.104+ | REST API assíncrona |
+
+  "pergunta": "O que é machine learning?",| **Vector Database** | Qdrant | 1.11.3 | Armazenamento vetorial |
+
+  "resposta": "Machine learning é...",| **LLM Server** | Ollama | 0.12.9 | Servidor de modelos |
+
+  "fontes": [...],| **LLM Model** | Qwen 2.5 | 7B | Geração de respostas |
+
+  "raciocinio": "Resposta baseada em 5 fontes",| **Embeddings** | SentenceTransformers | 2.3.0 | Vetorização multilíngue |
+
+  "tempo_processamento_ms": 1250.5| **Transformers** | HuggingFace Transformers | 4.36.0 | Backend para embeddings |
+
+}| **Document Processing** | LangChain | 0.1.0+ | Pipeline de documentos |
+
+```| **Containerization** | Docker Compose | - | Orquestração |
+
 | **Language** | Python | 3.11+ | Runtime |
 
-## 🚀 Quick Start
+#### **POST /adicionar** - Adicionar Artigo
 
-### Pré-requisitos
+Adiciona novo artigo da Wikipedia ao sistema.## 🚀 Quick Start
 
-- **Docker & Docker Compose** instalados
-- **8GB+ RAM** disponível
-- **15GB+ espaço em disco** livre
-- **Windows**, **Linux** ou **macOS**
 
-### 1. Clone o Repositório
 
-```bash
-git clone https://github.com/ekotuja-AI/dicionario_vetorial.git
-cd dicionario_vetorial
+**Request:**### Pré-requisitos
+
+```json
+
+{- **Docker & Docker Compose** instalados
+
+  "titulo": "Python (programming language)"- **8GB+ RAM** disponível
+
+}- **15GB+ espaço em disco** livre
+
+```- **Windows**, **Linux** ou **macOS**
+
+
+
+**Response:**### 1. Clone o Repositório
+
+```json
+
+{```bash
+
+  "status": "success",git clone https://github.com/ekotuja-AI/dicionario_vetorial.git
+
+  "titulo": "Python (programming language)",cd dicionario_vetorial
+
+  "chunks_adicionados": 47,```
+
+  "tempo_processamento_ms": 3421.2
+
+}### 2. Inicie os Containers
+
 ```
 
-### 2. Inicie os Containers
-
 ```bash
-# Inicia todos os serviços
-docker-compose up -d
 
-# Monitore os logs
-docker-compose logs -f
-```
+#### **GET /status** - Status do Sistema# Inicia todos os serviços
 
-### 3. Aguarde Inicialização
+```jsondocker-compose up -d
 
-O sistema irá:
+{
+
+  "status": "ok",# Monitore os logs
+
+  "qdrant_conectado": true,docker-compose logs -f
+
+  "colecoes": 2,```
+
+  "modelo_embedding_carregado": true,
+
+  "inicializado": true### 3. Aguarde Inicialização
+
+}
+
+```O sistema irá:
+
 - ✅ Inicializar Qdrant (banco vetorial)
-- ✅ Baixar Qwen 2.5 7B (~4.7GB) - **primeira vez apenas**
-- ✅ Carregar modelo de embeddings
-- ✅ Configurar FastAPI
 
-**Tempo estimado**: 5-10 minutos na primeira execução
+#### **GET /estatisticas** - Estatísticas- ✅ Baixar Qwen 2.5 7B (~4.7GB) - **primeira vez apenas**
 
-### 4. Acesse o Sistema
+```json- ✅ Carregar modelo de embeddings
+
+{- ✅ Configurar FastAPI
+
+  "total_chunks": 7734,
+
+  "collections": ["wikipedia_simple"],**Tempo estimado**: 5-10 minutos na primeira execução
+
+  "qdrant_host": "qdrant:6333"
+
+}### 4. Acesse o Sistema
+
+```
 
 - 🌐 **Interface Web**: http://localhost:9000
-- 📖 **Documentação API**: http://localhost:9000/docs
+
+---- 📖 **Documentação API**: http://localhost:9000/docs
+
 - 📊 **Status**: http://localhost:9000/status
-- 📈 **Estatísticas**: http://localhost:9000/estatisticas
 
-## 📊 Dados Atuais
+## 🔧 Configuração Avançada- 📈 **Estatísticas**: http://localhost:9000/estatisticas
 
-### Base de Conhecimento
 
-- **Fonte**: Simple Wikipedia (inglês simplificado)
-- **Artigos**: 100 processados
-- **Chunks**: 1566 vetorizados
-- **Dimensões**: 384 (multilíngue)
-- **Modelo Embedding**: paraphrase-multilingual-MiniLM-L12-v2
 
-### Modelo LLM
+### Variáveis de Ambiente## 📊 Dados Atuais
 
-- **Nome**: Qwen 2.5 (7B parâmetros)
-- **Tamanho**: 4.7 GB
+
+
+Edite `.env` ou `docker-compose.yml`:### Base de Conhecimento
+
+
+
+```env- **Fonte**: Simple Wikipedia (inglês simplificado)
+
+# Qdrant (Vector Database)- **Artigos**: 100 processados
+
+QDRANT_HOST=qdrant- **Chunks**: 1566 vetorizados
+
+QDRANT_PORT=6333- **Dimensões**: 384 (multilíngue)
+
+COLLECTION_NAME=wikipedia_simple- **Modelo Embedding**: paraphrase-multilingual-MiniLM-L12-v2
+
+
+
+# Ollama (LLM)### Modelo LLM
+
+OLLAMA_HOST=ollama
+
+OLLAMA_PORT=11434- **Nome**: Qwen 2.5 (7B parâmetros)
+
+LLM_MODEL_NAME=qwen2.5:7b- **Tamanho**: 4.7 GB
+
 - **Quantização**: Q4_0
-- **Contexto**: 128K tokens
-- **Capabilities**: Tool calling, RAG, Multilíngue
+
+# Embeddings- **Contexto**: 128K tokens
+
+EMBEDDING_MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2- **Capabilities**: Tool calling, RAG, Multilíngue
+
 - **Idiomas**: Português, Inglês, Espanhol, Chinês, +25 outros
 
-## 🔧 Configuração
+# Chunk Configuration
 
-### Variáveis de Ambiente (.env)
+CHUNK_SIZE=1000## 🔧 Configuração
 
-```env
+CHUNK_OVERLAP=200
+
+```### Variáveis de Ambiente (.env)
+
+
+
+### Trocar Modelo LLM```env
+
 # Qdrant Vector Database
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
 
-# Ollama LLM Server
-OLLAMA_HOST=localhost
+```bashQDRANT_HOST=localhost
+
+# Baixar modelo diferenteQDRANT_PORT=6333
+
+docker exec ollama ollama pull qwen2.5:14b
+
+docker exec ollama ollama pull llama3.1:8b# Ollama LLM Server
+
+docker exec ollama ollama pull gemma2:9bOLLAMA_HOST=localhost
+
 OLLAMA_PORT=11434
-LLM_MODEL=qwen2.5:7b
-LLM_MAX_TOKENS=512
+
+# Atualizar docker-compose.ymlLLM_MODEL=qwen2.5:7b
+
+LLM_MODEL_NAME=qwen2.5:14bLLM_MAX_TOKENS=512
+
 LLM_TEMPERATURE=0.7
 
-# Embeddings Model
-EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+# Reiniciar
 
-# Data Directories
+docker-compose restart app# Embeddings Model
+
+```EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+
+
+
+### Adicionar Mais Artigos# Data Directories
+
 DATA_DIR=./data
-MODELS_DIR=./models
-```
 
-### Volumes Docker
+**Método 1: Script Python**MODELS_DIR=./models
+
+```bash```
+
+# Edite adicionar_artigos.py com títulos desejados
+
+python adicionar_artigos.py### Volumes Docker
+
+```
 
 | Volume | Descrição | Tamanho Aproximado |
-|--------|-----------|-------------------|
-| `qdrant_storage` | Dados do banco vetorial | ~500 MB |
-| `ollama_models` | Modelos LLM | ~5 GB |
-| `./data` | Dumps e cache | ~1 GB |
 
-## 📚 Uso da API
+**Método 2: Via API**|--------|-----------|-------------------|
 
-### Busca Semântica
+```bash| `qdrant_storage` | Dados do banco vetorial | ~500 MB |
 
-```bash
-curl -X POST "http://localhost:9000/buscar" \
+curl -X POST http://localhost:9000/adicionar \| `ollama_models` | Modelos LLM | ~5 GB |
+
+  -H "Content-Type: application/json" \| `./data` | Dumps e cache | ~1 GB |
+
+  -d '{"titulo": "Machine learning"}'
+
+```## 📚 Uso da API
+
+
+
+**Método 3: Interface Web**### Busca Semântica
+
+- Acesse http://localhost:9000
+
+- Aba "Adicionar Artigo"```bash
+
+- Digite o título e clique em "Adicionar"curl -X POST "http://localhost:9000/buscar" \
+
   -H "Content-Type: application/json" \
-  -d '{"query": "inteligência artificial", "limite": 5}'
+
+---  -d '{"query": "inteligência artificial", "limite": 5}'
+
 ```
 
+## 🧪 Testes
+
 **PowerShell:**
-```powershell
+
+### Executar Testes Unitários```powershell
+
 $body = '{"query": "inteligência artificial", "limite": 5}'
-Invoke-RestMethod -Uri "http://localhost:9000/buscar" `
-  -Method Post -Body $body -ContentType "application/json"
-```
 
-### Perguntas com RAG
+```bashInvoke-RestMethod -Uri "http://localhost:9000/buscar" `
 
-```bash
+# Todos os testes (48 total)  -Method Post -Body $body -ContentType "application/json"
+
+docker exec offline_wikipedia_app pytest /app/tests/ -v```
+
+
+
+# Por arquivo### Perguntas com RAG
+
+docker exec offline_wikipedia_app pytest /app/tests/test_models.py -v
+
+docker exec offline_wikipedia_app pytest /app/tests/test_services.py -v```bash
+
 curl -X POST "http://localhost:9000/perguntar" \
-  -H "Content-Type: application/json" \
-  -d '{"pergunta": "O que é Python?"}'
+
+# Com cobertura  -H "Content-Type: application/json" \
+
+docker exec offline_wikipedia_app pytest /app/tests/ --cov=api --cov=services  -d '{"pergunta": "O que é Python?"}'
+
+``````
+
+
+
+### Testar Busca**PowerShell:**
+
+```powershell
+
+```bash$body = '{"pergunta": "O que é Python?"}'
+
+python test_embeddings.pyInvoke-RestMethod -Uri "http://localhost:9000/perguntar" `
+
+```  -Method Post -Body $body -ContentType "application/json"
+
 ```
 
-**PowerShell:**
-```powershell
-$body = '{"pergunta": "O que é Python?"}'
-Invoke-RestMethod -Uri "http://localhost:9000/perguntar" `
-  -Method Post -Body $body -ContentType "application/json"
-```
+### Testar RAG
 
 ### Adicionar Artigos
 
 ```bash
-curl -X POST "http://localhost:9000/adicionar" \
+
+python test_rag_melhorado.py```bash
+
+```curl -X POST "http://localhost:9000/adicionar" \
+
   -H "Content-Type: application/json" \
-  -d '{"titulo": "Machine Learning"}'
+
+### Testar Conhecimento  -d '{"titulo": "Machine Learning"}'
+
 ```
 
-## 🎨 Interface Web
+```bash
+
+python testar_conhecimento.py## 🎨 Interface Web
+
+```
 
 A interface web oferece:
-- 🔍 **Busca interativa** com resultados em tempo real
-- 💬 **Chat com IA** para perguntas complexas
-- ➕ **Adicionar artigos** dinamicamente
-- 📊 **Estatísticas** da base de conhecimento
+
+**Cobertura Atual:**- 🔍 **Busca interativa** com resultados em tempo real
+
+- ✅ 48/48 testes passando (100%)- 💬 **Chat com IA** para perguntas complexas
+
+- ⏱️ Execução: ~6 segundos- ➕ **Adicionar artigos** dinamicamente
+
+- 📊 Cobertura: Models, Services, Config, Integration- 📊 **Estatísticas** da base de conhecimento
+
 - 🎨 **Design moderno** com gradiente purple
+
+---
 
 ## 📖 Expandindo a Base
 
+## 📊 Estrutura do Projeto
+
 ### Processar Dumps da Wikipedia
 
-```bash
-# 1. Baixar dump (executar dentro do container)
-docker exec offline_wikipedia_app python scripts/download_wikipedia.py \
-  --language simple \
-  --max-articles 1000
-
-# 2. O processamento é automático com LangChain
 ```
 
-### Adicionar Artigos Específicos via API
+dicionario_vetorial/```bash
 
-```python
-import requests
+├── api/# 1. Baixar dump (executar dentro do container)
 
-# Lista de artigos para adicionar
-artigos = [
-    "Artificial Intelligence",
-    "Machine Learning",
-    "Deep Learning",
-    "Natural Language Processing"
-]
+│   ├── __init__.pydocker exec offline_wikipedia_app python scripts/download_wikipedia.py \
 
-for titulo in artigos:
-    response = requests.post(
-        "http://localhost:9000/adicionar",
-        json={"titulo": titulo}
-    )
-    print(f"{titulo}: {response.json()}")
-```
+│   ├── config.py              # Configurações da API  --language simple \
 
-## 🐳 Gerenciamento Docker
+│   ├── models.py              # Modelos Pydantic  --max-articles 1000
 
-### Comandos Úteis
+│   └── wikipediaFuncionalAPI.py  # Endpoints FastAPI
 
-```bash
+├── services/# 2. O processamento é automático com LangChain
+
+│   ├── __init__.py```
+
+│   ├── langchainWikipediaService.py  # LangChain integration
+
+│   ├── wikipediaOfflineService.py     # Serviço principal### Adicionar Artigos Específicos via API
+
+│   └── wikipediaDumpService.py        # Processar dumps
+
+├── tests/```python
+
+│   ├── test_config.py         # Testes de configuraçãoimport requests
+
+│   ├── test_models.py         # Testes de modelos
+
+│   ├── test_services.py       # Testes de serviços# Lista de artigos para adicionar
+
+│   ├── test_integration.py    # Testes de integraçãoartigos = [
+
+│   ├── README.md              # Documentação dos testes    "Artificial Intelligence",
+
+│   └── RESULTADOS_TESTES.md   # Resultados da execução    "Machine Learning",
+
+├── scripts/    "Deep Learning",
+
+│   ├── download_wikipedia.py  # Baixar dumps Wikipedia    "Natural Language Processing"
+
+│   └── processar_via_api.py   # Processar artigos]
+
+├── static/
+
+│   └── index.html             # Interface webfor titulo in artigos:
+
+├── docker-compose.yml         # Orquestração    response = requests.post(
+
+├── Dockerfile                 # Build da aplicação        "http://localhost:9000/adicionar",
+
+├── requirements.txt           # Dependências Python        json={"titulo": titulo}
+
+├── pytest.ini                 # Configuração pytest    )
+
+├── adicionar_artigos.py       # Script para adicionar artigos    print(f"{titulo}: {response.json()}")
+
+├── testar_conhecimento.py     # Script para testar respostas```
+
+└── README.md                  # Este arquivo
+
+```## 🐳 Gerenciamento Docker
+
+
+
+---### Comandos Úteis
+
+
+
+## 🐛 Solução de Problemas```bash
+
 # Iniciar serviços
-docker-compose up -d
 
-# Parar serviços
+### Busca não retorna resultadosdocker-compose up -d
+
+
+
+**Problema:** `score_threshold` muito alto ou base vazia# Parar serviços
+
 docker-compose stop
 
-# Reiniciar serviços
-docker-compose restart
+**Solução:**
 
-# Ver logs
+```python# Reiniciar serviços
+
+# Ajustar threshold em services/wikipediaOfflineService.pydocker-compose restart
+
+score_threshold = 0.5  # Era 0.7 (muito restritivo)
+
+```# Ver logs
+
 docker-compose logs -f
 
+### Respostas da IA genéricas/ruins
+
 # Ver logs de um serviço específico
-docker-compose logs -f app
 
-# Remover tudo (incluindo volumes)
-docker-compose down -v
+**Causas possíveis:**docker-compose logs -f app
 
-# Rebuild após mudanças
-docker-compose up -d --build
-```
+1. Modelo LLM pequeno (qwen2.5:7b)
+
+2. Poucos artigos na base (~500)# Remover tudo (incluindo volumes)
+
+3. Contexto curto (3-5 chunks)docker-compose down -v
+
+
+
+**Soluções:**# Rebuild após mudanças
+
+```bashdocker-compose up -d --build
+
+# 1. Modelo melhor```
+
+docker exec ollama ollama pull qwen2.5:14b
 
 ### PowerShell Script (Windows)
 
-O projeto inclui `docker-restart.ps1`:
+# 2. Adicionar mais artigos
 
-```powershell
-.\docker-restart.ps1
-```
+python adicionar_artigos.pyO projeto inclui `docker-restart.ps1`:
 
-## � Melhorias Recentes
 
-### v2.1 - Correções Críticas de Busca Vetorial (Nov 2024)
 
-#### 🐛 Problema Resolvido
-- **Bug**: Sistema retornava resultados incorretos (ex: "Python" para perguntas sobre África)
+# 3. Aumentar max_chunks```powershell
+
+# Em perguntar: max_chunks=10.\docker-restart.ps1
+
+``````
+
+
+
+### Container não inicia## � Melhorias Recentes
+
+
+
+```bash### v2.1 - Correções Críticas de Busca Vetorial (Nov 2024)
+
+# Ver logs
+
+docker logs offline_wikipedia_app#### 🐛 Problema Resolvido
+
+docker logs ollama- **Bug**: Sistema retornava resultados incorretos (ex: "Python" para perguntas sobre África)
+
 - **Causa**: Embedding model não sendo inicializado corretamente + versões incompatíveis
 
-#### ✅ Correções Aplicadas
-1. **Atualização de Dependências**
-   - `sentence-transformers`: 2.2.2 → 2.3.0
-   - `transformers`: adicionado 4.36.0 (compatibilidade)
+# Reiniciar
 
-2. **Lifecycle Management**
-   - Implementado `@asynccontextmanager lifespan` no FastAPI
+docker-compose down#### ✅ Correções Aplicadas
+
+docker-compose up -d1. **Atualização de Dependências**
+
+   - `sentence-transformers`: 2.2.2 → 2.3.0
+
+# Recriar volumes   - `transformers`: adicionado 4.36.0 (compatibilidade)
+
+docker-compose down -v
+
+docker-compose up -d2. **Lifecycle Management**
+
+```   - Implementado `@asynccontextmanager lifespan` no FastAPI
+
    - Garante inicialização correta do LangChain service na startup
 
+### Ollama muito lento
+
 3. **Busca Vetorial Otimizada**
-   - Busca direta com `embedding_model.encode()` + `qdrant_client.search()`
-   - Compatibilidade Pydantic v2 no `QdrantRetriever`
+
+```bash   - Busca direta com `embedding_model.encode()` + `qdrant_client.search()`
+
+# Trocar para modelo menor   - Compatibilidade Pydantic v2 no `QdrantRetriever`
+
+docker exec ollama ollama pull qwen2.5:3b
 
 4. **Ferramentas de Gestão**
-   - Novo script: `scripts/listar_artigos.py`
-   - Exporta inventário em TXT e JSON
-   - Estatísticas: 500 artigos, 9300 chunks, top articles
 
-#### 📊 Resultados
+# Ou verificar recursos   - Novo script: `scripts/listar_artigos.py`
+
+docker stats   - Exporta inventário em TXT e JSON
+
+```   - Estatísticas: 500 artigos, 9300 chunks, top articles
+
+
+
+---#### 📊 Resultados
+
 - **Antes**: Python (score 0.80) para "países da África"  
-- **Depois**: Africa (scores 0.73-0.74) ✅ **+92% de precisão**
+
+## 🔄 Melhorias Recentes- **Depois**: Africa (scores 0.73-0.74) ✅ **+92% de precisão**
+
 - **RAG**: Respostas corretas citando Nigéria, Egito, Sudão
 
-### Scripts Utilitários
+### v1.2.0 (Atual)
 
-```bash
-# Listar todos os artigos no Qdrant
-docker exec offline_wikipedia_app python scripts/listar_artigos.py --output artigos_lista.txt --json artigos.json
+- ✅ **Bug Fix**: Ajustado `score_threshold` de 0.7 → 0.5 (busca agora funciona!)### Scripts Utilitários
+
+- ✅ **Testes**: Adicionada suite completa com 48 testes unitários (100% passando)
+
+- ✅ **Prompt Melhorado**: RAG agora gera respostas mais detalhadas e contextualizadas```bash
+
+- ✅ **Scripts**: Adicionados `adicionar_artigos.py` e `testar_conhecimento.py`# Listar todos os artigos no Qdrant
+
+- ✅ **Documentação**: README completo e atualizadodocker exec offline_wikipedia_app python scripts/listar_artigos.py --output artigos_lista.txt --json artigos.json
+
+- ✅ **Parâmetros Ollama**: Otimizados para respostas melhores (temperature, top_p, num_predict)
 
 # Ver estatísticas
-docker exec offline_wikipedia_app python scripts/listar_artigos.py --host qdrant
+
+### v1.1.0docker exec offline_wikipedia_app python scripts/listar_artigos.py --host qdrant
+
+- LangChain integration```
+
+- Multi-service fallback
+
+- Interface web moderna**Output exemplo:**
+
 ```
 
-**Output exemplo:**
-```
-📊 Estatísticas:
-- Total de chunks: 9300
-- Artigos únicos: 500
-- Média de chunks/artigo: 18.6
+### v1.0.0📊 Estatísticas:
 
-🏆 Top 5 artigos:
+- Sistema RAG básico- Total de chunks: 9300
+
+- 500 artigos Simple English Wikipedia- Artigos únicos: 500
+
+- Busca vetorial com Qdrant- Média de chunks/artigo: 18.6
+
+
+
+---🏆 Top 5 artigos:
+
 1. Chemistry: 420 chunks
-2. Water: 416 chunks
+
+## 📈 Roadmap2. Water: 416 chunks
+
 3. Science: 396 chunks
-4. Biology: 385 chunks
-5. Earth: 372 chunks
-```
 
-## �🔍 Troubleshooting
+### Próximas Funcionalidades4. Biology: 385 chunks
 
-### Problema: Container não inicia
+- [ ] Reranking de resultados (BM25 + semantic)5. Earth: 372 chunks
+
+- [ ] Hybrid search (keyword + semantic)```
+
+- [ ] Cache de perguntas frequentes
+
+- [ ] Suporte a múltiplos idiomas da Wikipedia## �🔍 Troubleshooting
+
+- [ ] Fine-tuning do modelo de embeddings
+
+- [ ] Integração com GPT-4/Claude (opcional)### Problema: Container não inicia
+
+- [ ] Metrics e observability (Prometheus/Grafana)
 
 ```bash
-# Verificar logs
-docker-compose logs app
 
-# Reiniciar serviços
-docker-compose restart
-```
+### Contribuindo# Verificar logs
 
-### Problema: Modelo Ollama não encontrado
+Pull requests são bem-vindos! Para grandes mudanças:docker-compose logs app
 
-```bash
+1. Abra uma issue primeiro
+
+2. Fork o projeto# Reiniciar serviços
+
+3. Crie uma branch: `git checkout -b feature/nova-funcionalidade`docker-compose restart
+
+4. Commit: `git commit -m 'Adiciona nova funcionalidade'````
+
+5. Push: `git push origin feature/nova-funcionalidade`
+
+6. Abra um Pull Request### Problema: Modelo Ollama não encontrado
+
+
+
+---```bash
+
 # Entrar no container Ollama
-docker exec -it ollama_server bash
 
-# Listar modelos
+## 📄 Licençadocker exec -it ollama_server bash
+
+
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.# Listar modelos
+
 ollama list
 
+---
+
 # Baixar modelo manualmente
-ollama pull qwen2.5:7b
+
+## 🙏 Agradecimentosollama pull qwen2.5:7b
+
 ```
 
-### Problema: Embeddings não funcionam / Busca retorna resultados errados
+- [FastAPI](https://fastapi.tiangolo.com/) - Framework web moderno
 
-**Sintoma**: Busca retorna "Python" para qualquer pergunta, ou resultados de exemplo (Base de Conhecimento Vazia)
+- [Qdrant](https://qdrant.tech/) - Vector database de alta performance### Problema: Embeddings não funcionam / Busca retorna resultados errados
 
-**Solução**:
+- [Ollama](https://ollama.ai/) - LLMs locais simplificados
+
+- [LangChain](https://langchain.com/) - Framework para LLM applications**Sintoma**: Busca retorna "Python" para qualquer pergunta, ou resultados de exemplo (Base de Conhecimento Vazia)
+
+- [SentenceTransformers](https://www.sbert.net/) - Modelos de embeddings
+
+- [Wikipedia](https://www.wikipedia.org/) - Base de conhecimento**Solução**:
+
 ```bash
-# 1. Verificar se as dependências corretas estão instaladas
+
+---# 1. Verificar se as dependências corretas estão instaladas
+
 docker exec offline_wikipedia_app pip list | grep -E "sentence|transformers"
 
+## 📞 Suporte
+
 # Deve mostrar:
-# sentence-transformers  2.3.0
-# transformers          4.36.0
+
+- 📧 Issues: [GitHub Issues](https://github.com/ekotuja-AI/dicionario_vetorial/issues)# sentence-transformers  2.3.0
+
+- 📖 Documentação: Este README# transformers          4.36.0
+
+- 🧪 Testes: `tests/README.md`
 
 # 2. Se as versões estiverem erradas, rebuild da imagem
-docker-compose build --no-cache app
+
+---docker-compose build --no-cache app
+
 docker-compose up -d app
 
+**Desenvolvido com ❤️ usando Python, FastAPI, Qdrant e Ollama**
+
 # 3. Verificar inicialização nos logs
-docker logs offline_wikipedia_app 2>&1 | grep -i "inicializando\|langchain"
+
+[![Star this repo](https://img.shields.io/github/stars/ekotuja-AI/dicionario_vetorial?style=social)](https://github.com/ekotuja-AI/dicionario_vetorial)docker logs offline_wikipedia_app 2>&1 | grep -i "inicializando\|langchain"
+
 
 # 4. Testar busca
 curl -X POST "http://localhost:9000/buscar" \

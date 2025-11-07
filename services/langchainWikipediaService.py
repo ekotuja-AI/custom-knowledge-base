@@ -445,7 +445,7 @@ class LangChainWikipediaService:
             logger.error(f"❌ Erro ao inserir lote: {e}")
             raise
     
-    def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.7) -> List[SearchResult]:
+    def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.5) -> List[SearchResult]:
         """Busca documentos usando LangChain retriever"""
         if not self._initialized:
             raise Exception("Serviço não inicializado")
