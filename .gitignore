@@ -166,6 +166,3 @@ temp/
 *.backup
 *.old
 
-# Test files
-test_*.py
-*_test.py
