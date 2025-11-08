@@ -167,6 +167,10 @@ class WikipediaOfflineService:
     def adicionar_artigo_wikipedia(self, titulo: str) -> int:
         """Adiciona artigo da Wikipedia ao banco vetorial usando LangChain"""
         try:
+            if not self._initialized:
+                logger.error("❌ Serviço não inicializado")
+                raise Exception("Serviço não inicializado")
+            
             # Buscar artigo na Wikipedia
             logger.info(f"📖 Buscando artigo: {titulo}")
             artigo = self._buscar_artigo_wikipedia(titulo)
@@ -174,6 +178,8 @@ class WikipediaOfflineService:
             if not artigo:
                 logger.warning(f"⚠️ Artigo '{titulo}' não encontrado")
                 return 0
+            
+            logger.info(f"✅ Artigo encontrado: {artigo['title']}, extract length: {len(artigo.get('extract', ''))}, content length: {len(artigo.get('content', ''))}")
             
             # Usar LangChain para processamento
             logger.info(f"🔗 Processando com LangChain: {titulo}")
@@ -292,9 +298,10 @@ class WikipediaOfflineService:
     def _buscar_artigo_wikipedia(self, titulo: str) -> Optional[Dict]:
         """Busca artigo na Wikipedia API"""
         try:
-            # Headers com User-Agent apropriado
+            # Headers com User-Agent apropriado conforme política da Wikipedia
             headers = {
-                'User-Agent': 'WikipediaOfflineBot/1.0 (https://example.com/contact) Python/3.11'
+                'User-Agent': 'WikipediaOfflineRAG/2.0 (Educational project; Python/requests) Contact: github.com/ekotuja-AI',
+                'Accept': 'application/json'
             }
             
             # URL da API da Wikipedia em português
@@ -315,8 +322,20 @@ class WikipediaOfflineService:
                     content_parts = []
                     for section in sections:
                         if section.get('text'):
-                            content_parts.append(section['text'])
+                            # Remover tags HTML do texto
+                            import re
+                            text = section['text']
+                            # Remove tags HTML
+                            text = re.sub(r'<[^>]+>', '', text)
+                            # Remove múltiplos espaços
+                            text = re.sub(r'\s+', ' ', text)
+                            content_parts.append(text.strip())
                     content = " ".join(content_parts)
+                
+                # Se content está vazio, usar extract
+                if not content.strip():
+                    content = data.get('extract', '')
+                    logger.warning(f"⚠️ Usando apenas extract para '{titulo}' (sem conteúdo completo)")
                 
                 return {
                     'title': data.get('title', titulo),

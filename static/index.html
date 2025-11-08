@@ -332,9 +332,14 @@
                 <label for="articleTitle">Título do artigo da Wikipedia:</label>
                 <input type="text" id="articleTitle" placeholder="Ex: Python (programming language)">
             </div>
-            <button onclick="addArticle()">
-                Adicionar à Base
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="addArticle()" style="flex: 1;">
+                    Adicionar à Base
+                </button>
+                <button onclick="addRandomArticle()" style="flex: 1; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    🎲 Adicionar Aleatório
+                </button>
+            </div>
             <div id="addResults"></div>
         </div>
     </div>
@@ -494,16 +499,60 @@
 
                 const data = await response.json();
 
-                if (data.sucesso) {
+                if (response.ok && data.chunks_adicionados > 0) {
                     resultsDiv.innerHTML = `
                         <div class="success">
-                            ✅ Artigo adicionado com sucesso!<br>
-                            Chunks criados: ${data.chunks_adicionados || 0}
+                            ✅ ${data.message}<br>
+                            <strong>${data.titulo}</strong><br>
+                            Chunks criados: ${data.chunks_adicionados}<br>
+                            <a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a>
                         </div>
                     `;
                     loadStats(); // Atualizar estatísticas
+                    document.getElementById('articleTitle').value = ''; // Limpar input
                 } else {
-                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.mensagem || 'Falha ao adicionar artigo'}</div>`;
+                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            }
+        }
+
+        async function addRandomArticle() {
+            const resultsDiv = document.getElementById('addResults');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando artigo aleatório da Wikipedia...</div>';
+
+            try {
+                // Pegar artigo aleatório da Wikipedia em português
+                const randomResponse = await fetch('https://pt.wikipedia.org/api/rest_v1/page/random/summary');
+                const randomData = await randomResponse.json();
+                const randomTitle = randomData.title;
+
+                document.getElementById('articleTitle').value = randomTitle;
+                resultsDiv.innerHTML = `<div class="loading"><div class="spinner"></div>Adicionando "${randomTitle}"...</div>`;
+
+                // Adicionar o artigo
+                const response = await fetch(`${API_BASE}/adicionar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ titulo: randomTitle })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.chunks_adicionados > 0) {
+                    resultsDiv.innerHTML = `
+                        <div class="success">
+                            🎲 Artigo aleatório adicionado!<br>
+                            <strong>${data.titulo}</strong><br>
+                            Chunks criados: ${data.chunks_adicionados}<br>
+                            <small>${randomData.description || ''}</small><br>
+                            <a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a>
+                        </div>
+                    `;
+                    loadStats();
+                } else {
+                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
                 }
             } catch (error) {
                 resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
