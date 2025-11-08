@@ -22,7 +22,7 @@ Sistema completo de **Retrieval-Augmented Generation (RAG)** usando Wikipedia, b
 
 
 
-## 🎯 O Que É Este Projeto?Um sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que combina:
+## 🎯 Sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que combina:
 
 - 🌐 **Wikipedia** como base de conhecimento
 
@@ -544,39 +544,124 @@ curl -X POST http://localhost:9000/adicionar \| `ollama_models` | Modelos LLM | 
 
 ## 🧪 Testes
 
-**PowerShell:**
+O projeto possui **48 testes unitários** cobrindo configuração, modelos, serviços e integração.
 
-### Executar Testes Unitários```powershell
+### Executar Todos os Testes
 
-$body = '{"query": "inteligência artificial", "limite": 5}'
+**Linux/macOS (Bash):**
+```bash
+# Instalar dependências de teste (se necessário)
+pip install pytest pytest-cov
 
-```bashInvoke-RestMethod -Uri "http://localhost:9000/buscar" `
+# Rodar todos os testes
+python -m pytest tests/ -v
 
-# Todos os testes (48 total)  -Method Post -Body $body -ContentType "application/json"
+# Com relatório de cobertura
+python -m pytest tests/ --cov=api --cov=services --cov-report=html
 
-docker exec offline_wikipedia_app pytest /app/tests/ -v```
+# Abrir relatório de cobertura
+xdg-open htmlcov/index.html  # Linux
+open htmlcov/index.html       # macOS
+```
 
-
-
-# Por arquivo### Perguntas com RAG
-
-docker exec offline_wikipedia_app pytest /app/tests/test_models.py -v
-
-docker exec offline_wikipedia_app pytest /app/tests/test_services.py -v```bash
-
-curl -X POST "http://localhost:9000/perguntar" \
-
-# Com cobertura  -H "Content-Type: application/json" \
-
-docker exec offline_wikipedia_app pytest /app/tests/ --cov=api --cov=services  -d '{"pergunta": "O que é Python?"}'
-
-``````
-
-
-
-### Testar Busca**PowerShell:**
-
+**Windows (PowerShell):**
 ```powershell
+# Instalar dependências de teste (se necessário)
+pip install pytest pytest-cov
+
+# Rodar todos os testes
+python -m pytest tests/ -v
+
+# Com relatório de cobertura
+python -m pytest tests/ --cov=api --cov=services --cov-report=html
+
+# Abrir relatório de cobertura
+start htmlcov/index.html
+```
+
+**Docker (qualquer plataforma):**
+```bash
+# Todos os testes (48 total)
+docker exec offline_wikipedia_app pytest /app/tests/ -v
+
+# Com cobertura
+docker exec offline_wikipedia_app pytest /app/tests/ --cov=api --cov=services --cov-report=html
+```
+
+### Executar Testes Específicos
+
+**Linux/macOS/Windows:**
+```bash
+# Apenas testes de modelos
+python -m pytest tests/test_models.py -v
+
+# Apenas testes de serviços
+python -m pytest tests/test_services.py -v
+
+# Apenas testes de configuração
+python -m pytest tests/test_config.py -v
+
+# Apenas testes de integração
+python -m pytest tests/test_integration.py -v
+
+# Executar teste específico por nome
+python -m pytest tests/test_models.py::TestWikipediaResultModel::test_criar_result_minimo -v
+```
+
+### Resultados Esperados
+
+```
+===== 48 passed in 3.49s =====
+
+✅ 9 testes de configuração (test_config.py)
+✅ 12 testes de modelos (test_models.py)
+✅ 14 testes de serviços (test_services.py)
+✅ 13 testes de integração (test_integration.py)
+```
+
+Para mais detalhes sobre os testes, consulte [tests/README.md](tests/README.md).
+
+---
+
+## 🔍 Testando a API
+
+### Testar Busca Semântica
+
+**Linux/macOS (cURL):**
+```bash
+curl -X POST "http://localhost:9000/buscar" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "inteligência artificial", "limite": 5}'
+```
+
+**Windows (PowerShell):**
+```powershell
+$body = '{"query": "inteligência artificial", "limite": 5}'
+Invoke-RestMethod -Uri "http://localhost:9000/buscar" `
+  -Method Post -Body $body -ContentType "application/json"
+```
+
+### Perguntas com RAG
+
+**Linux/macOS (cURL):**
+```bash
+curl -X POST "http://localhost:9000/perguntar" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta": "O que é Python?"}'
+```
+
+**Windows (PowerShell):**
+```powershell
+$body = '{"pergunta": "O que é Python?"}'
+Invoke-RestMethod -Uri "http://localhost:9000/perguntar" `
+  -Method Post -Body $body -ContentType "application/json"
+```
+
+**Bash/cURL:**
+```bash
+curl -X POST "http://localhost:9000/perguntar" \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta": "O que é Python?"}'
 
 ```bash$body = '{"pergunta": "O que é Python?"}'
 
