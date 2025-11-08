@@ -36,7 +36,7 @@ jobs:
 
     - name: Start services with Docker Compose
       run: |
-        docker-compose up -d
+        docker compose up -d
         echo "Waiting for services to be ready..."
 
     - name: Wait for Qdrant
@@ -67,7 +67,7 @@ jobs:
       run: |
         echo "Waiting for App..."
         for i in {1..30}; do
-          if docker-compose logs app | grep -q "Uvicorn running"; then
+          if docker compose logs app | grep -q "Uvicorn running"; then
             echo "App is ready!"
             break
           fi
@@ -78,10 +78,10 @@ jobs:
     - name: Check services health
       run: |
         echo "=== Docker Compose Status ==="
-        docker-compose ps
+        docker compose ps
         echo ""
         echo "=== App Logs ==="
-        docker-compose logs --tail=50 app
+        docker compose logs --tail=50 app
         echo ""
         echo "=== Qdrant Health ==="
         curl -f http://localhost:6333/health || echo "Qdrant not responding"
@@ -97,11 +97,11 @@ jobs:
       if: failure()
       run: |
         echo "=== All Container Logs ==="
-        docker-compose logs
+        docker compose logs
         echo ""
         echo "=== Docker Process Status ==="
         docker ps -a
 
     - name: Stop services
       if: always()
-      run: docker-compose down -v
+      run: docker compose down -v
