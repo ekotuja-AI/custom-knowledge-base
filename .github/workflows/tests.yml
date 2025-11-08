@@ -1,10 +1,8 @@
-name: Tests
+name: Tests (Disabled)
 
+# Workflow desabilitado - usar docker-tests.yml
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:  # Apenas execução manual
 
 jobs:
   test:
