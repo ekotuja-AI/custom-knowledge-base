@@ -1,3 +1,250 @@
+# 📖 Sistema RAG Offline - Wikipedia + LangChain + Ollama
+
+Sistema completo de **Retrieval-Augmented Generation (RAG)** offline utilizando Wikipedia, LangChain e LLM local.
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-DC244C?style=for-the-badge&logo=qdrant&logoColor=white)](https://qdrant.tech/)
+[![LangChain](https://img.shields.io/badge/LangChain-121212?style=for-the-badge)](https://langchain.com/)
+[![Tests](https://img.shields.io/badge/tests-48%20passed-brightgreen?style=for-the-badge)]()
+
+---
+
+## 🎯 Visão Geral
+
+Sistema RAG (Retrieval-Augmented Generation) completo e **100% offline** que combina:
+- 🌐 Wikipedia como base de conhecimento
+- 🔍 Busca vetorial semântica com Qdrant
+- 🤖 LLM local (Qwen 2.5 7B) via Ollama
+- ⚡ LangChain para processamento de documentos
+- 🎨 Interface web para consultas
+
+### ✨ Funcionalidades
+- ✅ Busca Semântica (similaridade vetorial)
+- ✅ Perguntas Inteligentes (RAG)
+- ✅ 100% Offline (após ingestão)
+- ✅ Tool Calling (Qwen 2.5)
+- ✅ Ingestão em lote de dumps
+- ✅ Interface Web simples
+- ✅ API REST completa
+- ✅ 48 testes unitários (100% passando)
+
+---
+
+## 🏗️ Arquitetura
+
+### Diagrama
+```mermaid
+graph TB
+    User["👤 Usuário\nInterface Web\nlocalhost:9000"]
+    subgraph API[FastAPI REST API - Port 9000]
+        Routes["Endpoints:\nGET / (Interface)\nPOST /buscar (Busca)\nPOST /perguntar (RAG)\nPOST /adicionar (Artigos)\nGET /estatisticas (Métricas)"]
+    end
+    subgraph Processing[Camada de Processamento]
+        LangChain["🔗 LangChain\nTextSplitter | Retriever | Embeddings"]
+        WikiService["📚 Wikipedia Service\nBusca híbrida | RAG | Cache"]
+    end
+    subgraph Storage[Armazenamento]
+        Qdrant[("🗄️ Qdrant\nVetores 384d | Persistência")]
+        Cache[("💾 Cache Local")]
+    end
+    subgraph AI[Camada de IA]
+        Ollama["🤖 Ollama LLM\nQwen 2.5 7B"]
+        Embeddings["🧠 Sentence Transformers\nparaphrase-multilingual-MiniLM-L12-v2"]
+    end
+    User --> Routes
+    Routes --> WikiService
+    WikiService --> LangChain
+    WikiService --> Qdrant
+    LangChain --> Embeddings
+    Embeddings --> Qdrant
+    WikiService --> Ollama
+    WikiService --> Cache
+```
+
+### Fluxo
+1. Usuário pergunta → embedding → busca Qdrant → contexto → LLM → resposta
+2. Adicionar artigo → baixar → chunking → embeddings → armazenar → disponível
+
+---
+
+## 🚀 Início Rápido
+
+### Pré-requisitos
+- Docker & Docker Compose
+- 8GB+ RAM
+- 20GB+ disco livre
+
+### Instalação
+```bash
+git clone https://github.com/ekotuja-AI/dicionario_vetorial.git
+cd dicionario_vetorial
+docker-compose up -d
+docker-compose logs -f
+```
+
+### Acessos
+- Interface Web: http://localhost:9000
+- API Docs: http://localhost:9000/docs
+- Qdrant Dashboard: http://localhost:6333/dashboard
+
+### Primeiro Teste
+```bash
+curl -X POST http://localhost:9000/perguntar \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta": "O que é Python?"}'
+```
+
+---
+
+## 📚 API
+
+### Buscar
+```bash
+curl -X POST http://localhost:9000/buscar \
+  -H "Content-Type: application/json" \
+  -d '{"query": "inteligência artificial", "limite": 5}'
+```
+### Perguntar (RAG)
+```bash
+curl -X POST http://localhost:9000/perguntar \
+  -H "Content-Type: application/json" \
+  -d '{"pergunta": "Quem criou Python?", "max_chunks": 5}'
+```
+### Adicionar artigo
+```bash
+curl -X POST http://localhost:9000/adicionar \
+  -H "Content-Type: application/json" \
+  -d '{"titulo": "Machine Learning", "idioma": "pt"}'
+```
+### Status
+```bash
+curl http://localhost:9000/status
+```
+### Estatísticas
+```bash
+curl http://localhost:9000/estatisticas
+```
+
+---
+
+## 🧪 Testes
+Executar todos:
+```bash
+python -m pytest tests/ -v
+```
+Cobertura:
+```bash
+python -m pytest tests/ --cov=api --cov=services --cov-report=html
+```
+Por arquivo:
+```bash
+python -m pytest tests/test_models.py -v
+python -m pytest tests/test_services.py -v
+python -m pytest tests/test_config.py -v
+python -m pytest tests/test_integration.py -v
+```
+Resultado esperado:
+```
+===== 48 passed in ~3.5s =====
+```
+
+---
+
+## ⚙️ Configuração (.env)
+```env
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+COLLECTION_NAME=wikipedia_pt
+OLLAMA_HOST=ollama
+OLLAMA_PORT=11434
+LLM_MODEL=qwen2.5:7b
+EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_SIZE=384
+API_PORT=9000
+CHUNK_SIZE=500
+CHUNK_OVERLAP=50
+```
+Parâmetros principais (`services/wikipediaOfflineService.py`):
+```python
+score_threshold = 0.5
+max_chunks = 5
+temperature = 0.8
+num_predict = 800
+```
+
+---
+
+## 📁 Estrutura
+```
+api/        # Endpoints
+services/   # RAG e lógica
+tests/      # 48 testes
+static/     # Interface
+scripts/    # Utilitários
+data/       # Dumps
+Dockerfile  # Imagem
+docker-compose.yml
+requirements_minimal.txt
+pytest.ini
+```
+
+---
+
+## 🐳 Docker
+```bash
+docker-compose up -d
+docker-compose logs -f app
+docker-compose restart
+docker-compose down
+```
+Acesso shell:
+```bash
+docker exec -it offline_wikipedia_app bash
+docker exec -it offline_wikipedia_ollama bash
+```
+
+---
+
+## 🔧 Troubleshooting
+| Problema | Causa | Solução |
+|----------|-------|---------|
+| Busca vazia | Threshold alto | Reduza para 0.3 |
+| Resposta genérica | Pouco contexto | max_chunks += 3 |
+| Ollama falha | Modelo ausente | `ollama pull qwen2.5:7b` |
+| Testes falham | Dependência | Reinstalar requirements |
+
+---
+
+## 🗺️ Roadmap
+Concluído: busca semântica, RAG, testes, docs.
+Próximo: cache Redis, GPU, reranking, histórico.
+Futuro: múltiplas collections, PDFs, dashboards.
+
+---
+
+## 🤝 Contribuindo
+1. Fork
+2. Branch `feature/x`
+3. Commit e PR
+Guidelines: cobertura ≥80%, PEP8, documentar.
+
+---
+
+## 📄 Licença
+MIT.
+
+---
+
+## 🙏 Agradecimentos
+Qdrant · Ollama · LangChain · FastAPI · Sentence Transformers · Wikipedia
+
+---
+
+## ⭐ Apoie
+Se este projeto ajudou você, dê uma estrela no GitHub.
+
 # 📖 Sistema RAG Offline - Wikipedia + LangChain + Ollama# 🤖 Sistema RAG - Wikipedia + Qdrant + Ollama# 📖 Sistema RAG Offline - Wikipedia + LangChain + Ollama
 
 
