@@ -73,17 +73,40 @@ curl -X POST http://localhost:9000/perguntar \
 
 | Método | Rota | Função |
 |--------|------|--------|
+| GET  | / | Interface web principal |
+| GET  | /artigos.html | Navegador de artigos |
+| GET  | /artigos | Lista todos os artigos (JSON) |
 | POST | /buscar | Busca semântica |
 | POST | /perguntar | Pergunta usando RAG |
 | POST | /adicionar | Adiciona artigo da Wikipedia |
 | GET  | /estatisticas | Métricas (chunks, artigos) |
 | GET  | /status | Saúde do sistema |
 
-Exemplo busca:
+###  Interface Web
+
+🖥️ **Página Principal** (`http://localhost:9000/`)
+- Fazer perguntas com IA
+- Buscar artigos semanticamente
+- Adicionar novos artigos (manual ou aleatório)
+
+📚 **Navegador de Artigos** (`http://localhost:9000/artigos.html`)
+- Ver todos os artigos na base
+- Buscar por palavra-chave (tempo real)
+- Ordenar por nome, chunks ou recência
+- Acesso direto à Wikipedia
+
+###  Exemplos API
+
+Busca semântica:
 ```bash
 curl -X POST http://localhost:9000/buscar \
  -H 'Content-Type: application/json' \
  -d '{"query":"inteligência artificial","limite":5}'
+```
+
+Listar artigos:
+```bash
+curl http://localhost:9000/artigos
 ```
 
 ---
@@ -120,31 +143,41 @@ CHUNK_OVERLAP=50
 
 Principais ajustes (`services/wikipediaOfflineService.py`):
 ```python
-score_threshold = 0.5      # Similaridade mínima (0.3-0.7)
-max_chunks = 5             # Contexto usado no prompt
-temperature = 0.8          # Criatividade
-num_predict = 800          # Tokens máximos
+# Thresholds adaptativos baseados no tamanho da base
+MIN_SIMILARITY_SCORE:
+  < 10 docs:  0.08   # Bases muito pequenas
+  10-50 docs: 0.15   # Bases médias  
+  > 50 docs:  0.25   # Bases grandes
+
+# RAG
+max_chunks = 5       # Contexto usado no prompt
+temperature = 0.8    # Criatividade (0.0-1.0)
+num_predict = 800    # Tokens máximos na resposta
 ```
 
 ---
 
-##  Estrutura
+##  Estrutura do Projeto
 
 ```
-├── api/              # Endpoints FastAPI e models
-├── services/         # Lógica RAG, ingestão e Wikipedia
-├── static/           # Interface web (index.html, artigos.html)
-├── scripts/          # Scripts utilitários e auxiliares
-├── data/             # Dumps Wikipedia, artigos e cache
-├── docs/             # Documentação técnica
-├── docker/           # Arquivos Docker alternativos
-├── tests/            # Suite principal de testes (48 testes)
-├── tests_temp/       # Scripts de teste e debug temporários
-├── models/           # Modelos baixados (ML/embedding)
-├── Dockerfile        # Build da aplicação
-├── docker-compose.yml # Orquestração (app + ollama + qdrant)
-├── requirements_minimal.txt
-└── pytest.ini
+dicionario_vetorial/
+├── api/                      # 🌐 Endpoints FastAPI e models Pydantic
+├── services/                 # 🔧 Lógica RAG, ingestão e Wikipedia
+├── static/                   # 🎨 Interface web
+│   ├── index.html           #     Página principal (perguntas e busca)
+│   └── artigos.html         #     Navegador de artigos
+├── scripts/                  # 📜 Scripts utilitários
+├── data/                     # 📊 Dumps Wikipedia, artigos e cache
+├── docs/                     # 📚 Documentação técnica
+├── docker/                   # 🐳 Arquivos Docker alternativos
+├── tests/                    # ✅ Suite de testes (48 testes - 100% passing)
+│   └── pytest.ini           #     Configuração do pytest
+├── tests_temp/               # 🧪 Scripts de teste e debug temporários
+├── models/                   # 🤖 Modelos ML (embeddings)
+├── Dockerfile                # 🐳 Build da aplicação
+├── docker-compose.yml        # 🎼 Orquestração (app + ollama + qdrant)
+├── requirements_minimal.txt  # 📦 Dependências Python
+└── README.md                 # 📖 Este arquivo
 ```
 
 ---
