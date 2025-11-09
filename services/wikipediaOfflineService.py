@@ -438,7 +438,7 @@ class WikipediaOfflineService:
                 langchain_results = langchain_wikipedia_service.buscar_documentos(
                     query=query, 
                     limit=limit,
-                    score_threshold=0.5  # Ajustado para 0.5 - threshold mais permissivo
+                    score_threshold=0.05  # Threshold muito baixo para aceitar mais resultados
                 )
                 
                 if langchain_results:
@@ -596,14 +596,110 @@ class WikipediaOfflineService:
             # Buscar mais documentos para melhor contexto
             documentos = self.buscar_artigos(pergunta, limit=max_chunks)
             
-            if not documentos:
+            # Log para debug
+            if documentos:
+                logger.warning(f"🔍 buscar_artigos retornou {len(documentos)} docs: {[(d.title, round(d.score, 4)) for d in documentos]}")
+            else:
+                logger.warning(f"🔍 buscar_artigos retornou 0 documentos")
+            
+            # Verificar se não há artigos ou se os resultados estão vazios
+            if not documentos or len(documentos) == 0:
+                logger.warning(f"⚠️ Nenhum artigo encontrado para: {pergunta}")
                 return RAGResponse(
                     question=pergunta,
-                    answer="Desculpe, não encontrei informações relevantes na base de conhecimento.",
+                    answer="Ainda não existem artigos sobre este assunto na base de conhecimento.",
                     sources=[],
-                    reasoning="Nenhum documento relevante encontrado",
+                    reasoning="Base de conhecimento vazia ou sem artigos relevantes",
                     model_info={"status": "no_docs", "model": self.model_name}
                 )
+            
+            # Verificar se há conteúdo suficiente na base
+            try:
+                if self.client:
+                    collection_info = self.client.get_collection(self.collection_name)
+                    total_points = collection_info.points_count
+                    
+                    # Threshold adaptativo baseado no tamanho da base
+                    if total_points < 10:
+                        MIN_SIMILARITY_SCORE = 0.08  # 8% para bases muito pequenas (< 10 docs)
+                        logger.info(f"📊 Base pequena ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
+                    elif total_points < 50:
+                        MIN_SIMILARITY_SCORE = 0.15  # 15% para bases pequenas (10-50 docs)
+                        logger.info(f"📊 Base média ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
+                    else:
+                        MIN_SIMILARITY_SCORE = 0.25  # 25% para bases grandes (50+ docs)
+                        logger.info(f"📊 Base grande ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
+                else:
+                    MIN_SIMILARITY_SCORE = 0.15
+            except Exception as e:
+                MIN_SIMILARITY_SCORE = 0.60
+                logger.warning(f"Erro ao verificar tamanho da base: {e}")
+            
+            # Estratégia 1: Filtrar por score mínimo de similaridade (threshold alto)
+            documentos_relevantes = [doc for doc in documentos if doc.score >= MIN_SIMILARITY_SCORE]
+            
+            logger.warning(f"📊 Após filtro de score ({MIN_SIMILARITY_SCORE}): {len(documentos_relevantes)} docs - {[(d.title, round(d.score, 4)) for d in documentos_relevantes]}")
+            
+            # Estratégia 2: Verificar se termos da pergunta aparecem no título ou conteúdo
+            # SEMPRE verificar termos exatos para evitar respostas inventadas
+            if documentos_relevantes:
+                # Extrair termos principais da pergunta (remover palavras comuns e caracteres especiais)
+                import re
+                stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
+                # Remover pontuação e caracteres especiais, manter apenas letras e números
+                termos_pergunta = [re.sub(r'[^\w\s]', '', t.lower()) for t in pergunta.split() if t.lower() not in stopwords]
+                termos_pergunta = [t for t in termos_pergunta if len(t) > 2]  # Filtrar termos muito curtos
+                
+                if not termos_pergunta:
+                    # Se não há termos válidos, aceitar os documentos
+                    logger.info("⚠️ Nenhum termo válido extraído da pergunta, aceitando resultados")
+                else:
+                    # Verificar se pelo menos um termo aparece no título ou conteúdo
+                    docs_com_termo_exato = []
+                    logger.warning(f"🔄 Iniciando verificação de {len(documentos_relevantes)} documentos")
+                    for doc in documentos_relevantes:
+                        logger.warning(f"  🔎 Verificando documento: '{doc.title}' (score: {doc.score})")
+                        titulo_lower = doc.title.lower()
+                        conteudo_lower = doc.content.lower()
+                        
+                        # Verificar se algum termo da pergunta aparece no título ou conteúdo
+                        tem_termo = any(termo in titulo_lower or termo in conteudo_lower for termo in termos_pergunta)
+                        
+                        # Verificação adicional: se título aparece na pergunta (match reverso)
+                        titulo_palavras = [p for p in titulo_lower.split() if len(p) > 2]
+                        titulo_na_pergunta = any(palavra in pergunta.lower() for palavra in titulo_palavras)
+                        
+                        if tem_termo or titulo_na_pergunta:
+                            docs_com_termo_exato.append(doc)
+                            razao = "termos" if tem_termo else "título na pergunta"
+                            logger.warning(f"✅ Documento '{doc.title}' aceito ({razao}): {termos_pergunta}")
+                        else:
+                            logger.warning(f"⚠️ Documento '{doc.title}' não contém termos da pergunta {termos_pergunta} (score: {doc.score})")
+                    
+                    # Estratégia 3: Se nenhum documento contém os termos, considerar irrelevante
+                    if not docs_com_termo_exato:
+                        logger.warning(f"⚠️ Nenhum documento contém termos da pergunta '{pergunta}' (termos: {termos_pergunta})")
+                        return RAGResponse(
+                            question=pergunta,
+                            answer="Ainda não existem artigos sobre este assunto na base de conhecimento.",
+                            sources=[],
+                            reasoning="Sem artigos contendo os termos da pergunta",
+                            model_info={"status": "no_exact_match", "model": self.model_name}
+                        )
+                    
+                    documentos_relevantes = docs_com_termo_exato
+            
+            if not documentos_relevantes:
+                logger.warning(f"⚠️ Nenhum artigo com similaridade suficiente para: {pergunta} (scores: {[doc.score for doc in documentos]})")
+                return RAGResponse(
+                    question=pergunta,
+                    answer="Ainda não existem artigos sobre este assunto na base de conhecimento.",
+                    sources=[],
+                    reasoning="Sem artigos relevantes com similaridade suficiente",
+                    model_info={"status": "low_similarity", "model": self.model_name}
+                )
+            
+            documentos = documentos_relevantes
             
             logger.info(f"📚 Encontrou {len(documentos)} documentos para RAG")
             
@@ -714,51 +810,9 @@ RESPOSTA EM PORTUGUÊS:"""
             return f"Erro ao gerar resposta: {str(e)}"
     
     def _get_sample_results(self, query: str, limit: int) -> List[SearchResult]:
-        """Resultados de exemplo para fallback"""
-        logger.warning(f"🔄 Usando resultados de fallback para query: '{query}'")
-        
-        sample_results = [
-            SearchResult(
-                title="Base de Conhecimento Vazia",
-                content=f"Não foram encontrados resultados para '{query}'. Isto pode indicar que: 1) A base de conhecimento não contém informações sobre este tópico, 2) Os termos de busca não correspondem ao conteúdo disponível, 3) Há um problema técnico na busca. Tente termos mais genéricos ou verifique se o conteúdo foi carregado corretamente na base.",
-                url="",
-                score=0.1,
-                categories=["Sistema", "Fallback"]
-            ),
-            SearchResult(
-                title="Inteligência Artificial",
-                content="A inteligência artificial (IA) é um campo da ciência da computação dedicado ao desenvolvimento de sistemas capazes de realizar tarefas que normalmente requerem inteligência humana, como reconhecimento de padrões, tomada de decisões e processamento de linguagem natural.",
-                url="https://pt.wikipedia.org/wiki/Inteligência_artificial",
-                score=0.05,
-                categories=["Tecnologia", "Ciência da Computação", "Exemplo"]
-            ),
-            SearchResult(
-                title="Machine Learning",
-                content="Aprendizado de máquina é um subcampo da inteligência artificial que se concentra no desenvolvimento de algoritmos que podem aprender e fazer previsões ou decisões baseadas em dados, sem serem explicitamente programados para cada tarefa específica.",
-                url="https://pt.wikipedia.org/wiki/Aprendizado_de_máquina",
-                score=0.05,
-                categories=["Tecnologia", "Algoritmos", "Exemplo"]
-            )
-        ]
-        
-        # Filtrar por relevância básica
-        query_lower = query.lower()
-        filtered_results = []
-        
-        # Sempre incluir o resultado de "Base Vazia" primeiro
-        filtered_results.append(sample_results[0])
-        
-        # Adicionar outros resultados se houver alguma relevância
-        for result in sample_results[1:]:
-            if any(word in result.title.lower() or word in result.content.lower() 
-                   for word in query_lower.split()):
-                filtered_results.append(result)
-        
-        # Se não encontrou relevância, adicionar os exemplos mesmo assim
-        if len(filtered_results) == 1:  # Só tem o resultado de "Base Vazia"
-            filtered_results.extend(sample_results[1:])
-        
-        return filtered_results[:limit]
+        """Retorna lista vazia - não usar samples hardcoded"""
+        logger.warning(f"⚠️ Nenhum resultado encontrado para '{query}' - retornando lista vazia")
+        return []
     
     def obter_estatisticas(self) -> Dict[str, Any]:
         """Estatísticas da base Wikipedia"""
@@ -783,6 +837,61 @@ RESPOSTA EM PORTUGUÊS:"""
                 }
         except Exception as e:
             return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
+    
+    def listar_todos_artigos(self) -> Dict[str, Any]:
+        """Lista todos os artigos únicos na base de conhecimento"""
+        try:
+            if not self.client:
+                logger.error("❌ Cliente Qdrant não inicializado")
+                return {"artigos": [], "total": 0}
+            
+            # Buscar todos os pontos da coleção LangChain
+            all_points = []
+            offset = None
+            
+            while True:
+                result = self.client.scroll(
+                    collection_name="wikipedia_langchain",
+                    limit=100,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                
+                points, offset = result
+                all_points.extend(points)
+                
+                if offset is None:
+                    break
+            
+            # Agrupar por título e pegar informações únicas
+            artigos_dict = {}
+            for point in all_points:
+                title = point.payload.get('title', 'Sem título')
+                if title not in artigos_dict:
+                    artigos_dict[title] = {
+                        'title': title,
+                        'url': point.payload.get('url', ''),
+                        'chunks': 0,
+                        'timestamp': point.payload.get('timestamp', ''),
+                        'preview': point.payload.get('content', '')[:200]
+                    }
+                artigos_dict[title]['chunks'] += 1
+            
+            # Converter para lista e ordenar por título
+            artigos_list = sorted(artigos_dict.values(), key=lambda x: x['title'].lower())
+            
+            logger.info(f"📚 Encontrados {len(artigos_list)} artigos únicos ({len(all_points)} chunks total)")
+            
+            return {
+                "artigos": artigos_list,
+                "total": len(artigos_list),
+                "total_chunks": len(all_points)
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao listar artigos: {e}")
+            return {"artigos": [], "total": 0, "erro": str(e)}
     
     def limpar_colecao(self) -> bool:
         """Remove todos os pontos da coleção"""

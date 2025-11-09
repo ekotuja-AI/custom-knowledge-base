@@ -169,12 +169,12 @@ class TestSampleResults:
             assert hasattr(result, 'categories')
     
     def test_sample_results_relevancia(self):
-        """Testa relevância básica dos resultados"""
+        """Testa que _get_sample_results retorna lista vazia (comportamento atual)"""
         service = WikipediaOfflineService()
         
         # Busca por termo específico
         results = service._get_sample_results("inteligência artificial", limit=5)
         
-        # Pelo menos um resultado deve mencionar o termo
-        conteudos = " ".join([r.title + " " + r.content for r in results]).lower()
-        assert "inteligência" in conteudos or "artificial" in conteudos or "ia" in conteudos
+        # O sistema agora retorna lista vazia para evitar respostas inventadas
+        assert isinstance(results, list)
+        assert len(results) == 0

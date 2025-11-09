@@ -131,16 +131,20 @@ num_predict = 800          # Tokens máximos
 ##  Estrutura
 
 ```
-api/        # Endpoints FastAPI
-services/   # Lógica RAG / ingestão
-tests/      # Suite principal (48 testes)
-static/     # index.html
-scripts/    # Scripts utilitários
-data/       # Dumps / cache
-Dockerfile  # Build app
-docker-compose.yml
-requirements_minimal.txt
-pytest.ini
+├── api/              # Endpoints FastAPI e models
+├── services/         # Lógica RAG, ingestão e Wikipedia
+├── static/           # Interface web (index.html, artigos.html)
+├── scripts/          # Scripts utilitários e auxiliares
+├── data/             # Dumps Wikipedia, artigos e cache
+├── docs/             # Documentação técnica
+├── docker/           # Arquivos Docker alternativos
+├── tests/            # Suite principal de testes (48 testes)
+├── tests_temp/       # Scripts de teste e debug temporários
+├── models/           # Modelos baixados (ML/embedding)
+├── Dockerfile        # Build da aplicação
+├── docker-compose.yml # Orquestração (app + ollama + qdrant)
+├── requirements_minimal.txt
+└── pytest.ini
 ```
 
 ---

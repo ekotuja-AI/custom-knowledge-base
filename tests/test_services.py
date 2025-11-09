@@ -96,9 +96,9 @@ class TestSearchResultProcessing:
         
         results = service._get_sample_results("test query", limit=5)
         
-        # Primeiro resultado deve ser a mensagem de base vazia
-        assert len(results) > 0
-        assert "Base de Conhecimento Vazia" in results[0].title
+        # O sistema agora retorna lista vazia para evitar respostas inventadas
+        assert isinstance(results, list)
+        assert len(results) == 0
     
     def test_sample_results_tem_scores(self):
         """Testa se resultados de exemplo têm scores válidos"""

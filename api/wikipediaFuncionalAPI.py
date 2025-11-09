@@ -72,6 +72,12 @@ async def raiz():
     return FileResponse(str(static_path / "index.html"))
 
 
+@app.get("/artigos.html")
+async def artigos_page():
+    """Página de visualização de artigos"""
+    return FileResponse(str(static_path / "artigos.html"))
+
+
 @app.get("/api")
 async def api_info():
     """Endpoint com informações da API"""
@@ -121,6 +127,16 @@ async def obter_estatisticas():
         return wikipedia_offline_service.obter_estatisticas()
     except Exception as e:
         return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
+
+
+@app.get("/artigos")
+async def listar_artigos():
+    """Lista todos os artigos únicos na base de conhecimento"""
+    try:
+        return wikipedia_offline_service.listar_todos_artigos()
+    except Exception as e:
+        logger.error(f"Erro ao listar artigos: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao listar artigos: {str(e)}")
 
 
 @app.post("/buscar", response_model=BuscarResponse)
