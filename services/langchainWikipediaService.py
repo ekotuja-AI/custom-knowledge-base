@@ -460,15 +460,21 @@ class LangChainWikipediaService:
             # Gerar embedding da query diretamente
             query_vector = self.embedding_model.encode(query).tolist()
             
-            # Buscar no Qdrant diretamente
+            # Buscar no Qdrant diretamente (buscar mais para depois filtrar)
             search_result = self.qdrant_client.search(
                 collection_name=self.collection_name,
                 query_vector=query_vector,
-                limit=limit,
+                limit=limit * 3,  # Buscar 3x mais para ter margem após boosting
                 score_threshold=score_threshold
             )
             
-            # Converter para SearchResult
+            # Extrair termos da query para boosting
+            import re
+            stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
+            termos_query = [re.sub(r'[^\w\s]', '', t.lower()) for t in query.split() if t.lower() not in stopwords]
+            termos_query = [t for t in termos_query if len(t) > 2]
+            
+            # Converter para SearchResult e aplicar boosting
             results = []
             for hit in search_result:
                 result = SearchResult(
@@ -481,9 +487,39 @@ class LangChainWikipediaService:
                         'total_chunks': hit.payload.get('total_chunks', 1)
                     }
                 )
+                
+                # Aplicar boosting de 3x para matches exatos no título
+                titulo_lower = result.title.lower()
+                if termos_query and any(termo == titulo_lower or titulo_lower in termos_query for termo in termos_query):
+                    result.score = result.score * 3.0
+                    logger.info(f"🚀 Boosting aplicado: '{result.title}' - score {hit.score:.4f} → {result.score:.4f}")
+                
                 results.append(result)
             
-            logger.info(f"✅ Encontrou {len(results)} documentos")
+            # Reordenar por score após boosting
+            results = sorted(results, key=lambda x: x.score, reverse=True)
+            
+            # Remover duplicatas (manter apenas o chunk com maior score de cada artigo)
+            seen_titles = {}
+            unique_results = []
+            for result in results:
+                if result.title not in seen_titles:
+                    seen_titles[result.title] = result
+                    unique_results.append(result)
+                else:
+                    # Se encontrar duplicata, manter a de maior score
+                    if result.score > seen_titles[result.title].score:
+                        # Substituir na lista
+                        idx = unique_results.index(seen_titles[result.title])
+                        unique_results[idx] = result
+                        seen_titles[result.title] = result
+            
+            results = unique_results
+            
+            # Aplicar limite após deduplica��ão
+            results = results[:limit]
+            
+            logger.info(f"✅ Encontrou {len(results)} documentos únicos (top scores: {[round(r.score, 4) for r in results[:3]]})")
             return results
             
         except Exception as e:

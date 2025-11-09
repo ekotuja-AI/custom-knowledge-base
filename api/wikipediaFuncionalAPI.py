@@ -141,7 +141,7 @@ async def listar_artigos():
 
 @app.post("/buscar", response_model=BuscarResponse)
 async def buscar_artigos(request: BuscarRequest):
-    """Busca semântica em artigos da Wikipedia"""
+    """Busca semântica em artigos da Wikipedia com validação de relevância"""
     try:
         start_time = time.time()
         
@@ -149,6 +149,29 @@ async def buscar_artigos(request: BuscarRequest):
             query=request.query,
             limit=request.limit
         )
+        
+        # Aplicar validação de termos similar ao sistema RAG
+        if resultados:
+            stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
+            termos_query = [t.lower().strip('?.,!()') for t in request.query.split() if t.lower() not in stopwords and len(t) > 2]
+            
+            if termos_query:
+                resultados_filtrados = []
+                for r in resultados:
+                    titulo_lower = r.title.lower()
+                    conteudo_lower = r.content.lower()
+                    
+                    # Verificar se algum termo da query aparece no título ou conteúdo
+                    tem_termo = any(termo in titulo_lower or termo in conteudo_lower for termo in termos_query)
+                    
+                    # Verificação reversa: título aparece na query
+                    titulo_palavras = [p for p in titulo_lower.split() if len(p) > 2]
+                    titulo_na_query = any(palavra in request.query.lower() for palavra in titulo_palavras)
+                    
+                    if tem_termo or titulo_na_query:
+                        resultados_filtrados.append(r)
+                
+                resultados = resultados_filtrados
         
         end_time = time.time()
         tempo_busca_ms = (end_time - start_time) * 1000

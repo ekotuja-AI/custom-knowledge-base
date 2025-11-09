@@ -89,9 +89,9 @@ class WikipediaResultModel(BaseModel):
     url: str = Field(..., description="URL do artigo original na Wikipedia")
     score: float = Field(
         ...,
-        description="Score de similaridade semântica (0-1, maior é melhor)",
+        description="Score de similaridade semântica (0-3, maior é melhor, scores >1 indicam match exato no título)",
         ge=0.0,
-        le=1.0
+        le=3.0
     )
 
 

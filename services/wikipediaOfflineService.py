@@ -635,7 +635,24 @@ class WikipediaOfflineService:
                 MIN_SIMILARITY_SCORE = 0.60
                 logger.warning(f"Erro ao verificar tamanho da base: {e}")
             
-            # Estratégia 1: Filtrar por score mínimo de similaridade (threshold alto)
+            # Estratégia 1: Aplicar boosting para matches exatos no título ANTES de filtrar
+            import re
+            stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
+            termos_pergunta = [re.sub(r'[^\w\s]', '', t.lower()) for t in pergunta.split() if t.lower() not in stopwords]
+            termos_pergunta = [t for t in termos_pergunta if len(t) > 2]
+            
+            # Aplicar boosting de 3x para matches exatos no título
+            for doc in documentos:
+                titulo_lower = doc.title.lower()
+                # Se algum termo da pergunta é exatamente o título (ou vice-versa)
+                if termos_pergunta and any(termo == titulo_lower or titulo_lower in termos_pergunta for termo in termos_pergunta):
+                    doc.score = doc.score * 3.0
+                    logger.info(f"🚀 Boosting aplicado: '{doc.title}' - score {doc.score/3.0:.4f} → {doc.score:.4f}")
+            
+            # Reordenar documentos após boosting
+            documentos = sorted(documentos, key=lambda x: x.score, reverse=True)
+            
+            # Filtrar por score mínimo de similaridade
             documentos_relevantes = [doc for doc in documentos if doc.score >= MIN_SIMILARITY_SCORE]
             
             logger.warning(f"📊 Após filtro de score ({MIN_SIMILARITY_SCORE}): {len(documentos_relevantes)} docs - {[(d.title, round(d.score, 4)) for d in documentos_relevantes]}")
@@ -699,9 +716,24 @@ class WikipediaOfflineService:
                     model_info={"status": "low_similarity", "model": self.model_name}
                 )
             
-            documentos = documentos_relevantes
+            # Remover duplicatas (manter apenas o chunk com maior score de cada artigo)
+            seen_titles = {}
+            unique_docs = []
+            for doc in documentos_relevantes:
+                if doc.title not in seen_titles:
+                    seen_titles[doc.title] = doc
+                    unique_docs.append(doc)
+                else:
+                    # Se encontrar duplicata, manter a de maior score
+                    if doc.score > seen_titles[doc.title].score:
+                        idx = unique_docs.index(seen_titles[doc.title])
+                        unique_docs[idx] = doc
+                        seen_titles[doc.title] = doc
             
-            logger.info(f"📚 Encontrou {len(documentos)} documentos para RAG")
+            documentos = unique_docs
+            
+            logger.info(f"📚 Encontrou {len(documentos)} documentos únicos para RAG")
+
             
             # Preparar contexto com mais conteúdo por documento (600 chars)
             context_parts = []
