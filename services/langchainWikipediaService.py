@@ -322,9 +322,49 @@ class LangChainWikipediaService:
                         distance=Distance.COSINE
                     )
                 )
+                
+                # Criar índice de texto no campo page_content para busca textual
+                logger.info("📇 Criando índice de texto para busca textual...")
+                try:
+                    from qdrant_client.models import TextIndexParams, TokenizerType
+                    self.qdrant_client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name="page_content",
+                        field_schema=TextIndexParams(
+                            type="text",
+                            tokenizer=TokenizerType.WORD,
+                            min_token_len=2,
+                            max_token_len=20,
+                            lowercase=True
+                        )
+                    )
+                    logger.info("✅ Índice de texto criado com sucesso")
+                except Exception as idx_error:
+                    logger.warning(f"⚠️ Erro ao criar índice de texto: {idx_error}")
+                
                 logger.info(f"✅ Coleção '{self.collection_name}' criada")
             else:
                 logger.info(f"📦 Coleção '{self.collection_name}' já existe")
+                
+                # Verificar se o índice de texto existe, se não, criar
+                try:
+                    from qdrant_client.models import TextIndexParams, TokenizerType
+                    logger.info("🔍 Verificando índice de texto...")
+                    self.qdrant_client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name="page_content",
+                        field_schema=TextIndexParams(
+                            type="text",
+                            tokenizer=TokenizerType.WORD,
+                            min_token_len=2,
+                            max_token_len=20,
+                            lowercase=True
+                        ),
+                        wait=False
+                    )
+                    logger.info("✅ Índice de texto verificado/criado")
+                except Exception as idx_error:
+                    logger.debug(f"Índice já existe ou erro: {idx_error}")
                 
         except Exception as e:
             logger.error(f"❌ Erro ao criar coleção: {e}")
@@ -448,25 +488,214 @@ class LangChainWikipediaService:
     def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.5) -> List[SearchResult]:
         """Busca documentos usando LangChain retriever"""
         if not self._initialized:
-            raise Exception("Serviço não inicializado")
+            logger.error("❌ Serviço não inicializado - chamando inicializar()")
+            try:
+                self.inicializar()
+            except Exception as e:
+                logger.error(f"❌ Falha ao inicializar: {e}")
+                return []
         
         if self.embedding_model is None:
             logger.error("❌ Embedding model não inicializado")
             return []
         
+        if self.qdrant_client is None:
+            logger.error("❌ Qdrant client não inicializado")
+            return []
+        
         try:
             logger.info(f"🔍 Buscando: '{query}' (limit={limit}, threshold={score_threshold})")
             
-            # Gerar embedding da query diretamente
-            query_vector = self.embedding_model.encode(query).tolist()
+            # Verificar se a coleção tem dados
+            try:
+                col_info = self.qdrant_client.get_collection(self.collection_name)
+                logger.info(f"📊 Coleção '{self.collection_name}': {col_info.points_count} pontos")
+                if col_info.points_count == 0:
+                    logger.error(f"❌ Coleção '{self.collection_name}' está VAZIA!")
+                    return []
+            except Exception as e:
+                logger.error(f"❌ Erro ao acessar coleção: {e}")
+                return []
             
-            # Buscar no Qdrant diretamente (buscar mais para depois filtrar)
+            # Detectar nomes próprios (palavras com maiúsculas)
+            import re
+            palavras = query.split()
+            nomes_proprios = []
+            
+            # Lista de stopwords que podem aparecer no início
+            stopwords_inicio = ['o', 'a', 'os', 'as', 'que', 'quem', 'qual', 'quais', 'onde', 'quando', 'como']
+            
+            for i, palavra in enumerate(palavras):
+                palavra_limpa = re.sub(r'[^\w]', '', palavra)
+                
+                # Se for a primeira palavra, só detectar como nome próprio se não for stopword comum
+                if i == 0:
+                    # Primeira palavra com maiúscula que NÃO é stopword = provavelmente nome próprio
+                    if palavra_limpa and palavra_limpa[0].isupper() and len(palavra_limpa) > 2:
+                        if palavra.lower() not in stopwords_inicio:
+                            nomes_proprios.append(palavra_limpa)
+                else:
+                    # Palavras subsequentes com maiúscula = nome próprio
+                    if palavra_limpa and palavra_limpa[0].isupper() and len(palavra_limpa) > 2:
+                        nomes_proprios.append(palavra_limpa)
+            
+            if nomes_proprios:
+                logger.info(f"🏷️  Nomes próprios detectados: {nomes_proprios}")
+            
+            # Limpar query removendo stopwords e pontuação para melhorar embedding
+            stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por', 'em', 'no', 'na', 'quem', 'foi']
+            palavras_limpas = []
+            for palavra in query.split():
+                palavra_sem_pont = re.sub(r'[^\w]', '', palavra)  # Remove pontuação
+                if palavra_sem_pont.lower() not in stopwords and len(palavra_sem_pont) > 0:
+                    palavras_limpas.append(palavra_sem_pont)
+            
+            query_limpa = ' '.join(palavras_limpas)
+            
+            # Se a query ficou vazia após remover stopwords, usar original
+            if not query_limpa.strip():
+                query_limpa = query
+            
+            logger.info(f"🧹 Query limpa para embedding: '{query_limpa}'")
+            
+            # Gerar embedding da query LIMPA
+            query_vector = self.embedding_model.encode(query_limpa).tolist()
+            
+            # BUSCA 1: Busca semântica normal
             search_result = self.qdrant_client.search(
                 collection_name=self.collection_name,
                 query_vector=query_vector,
                 limit=limit * 3,  # Buscar 3x mais para ter margem após boosting
                 score_threshold=score_threshold
             )
+            
+            logger.info(f"📡 Busca semântica retornou {len(search_result)} chunks")
+            
+            # DEBUG: Mostrar alguns resultados da busca semântica
+            if len(search_result) == 0:
+                logger.warning(f"⚠️ BUSCA SEMÂNTICA RETORNOU 0 RESULTADOS!")
+                logger.warning(f"   Query: '{query}'")
+                logger.warning(f"   Query limpa: '{query_limpa}'")
+                logger.warning(f"   Collection: {self.collection_name}")
+                logger.warning(f"   Score threshold: {score_threshold}")
+                
+                # Tentar buscar SEM threshold para ver se há algum resultado
+                try:
+                    test_result = self.qdrant_client.search(
+                        collection_name=self.collection_name,
+                        query_vector=query_vector,
+                        limit=5,
+                        score_threshold=0.0
+                    )
+                    logger.warning(f"   Com threshold=0.0: {len(test_result)} resultados")
+                    if test_result:
+                        logger.warning(f"   Melhor score: {test_result[0].score:.4f}")
+                except:
+                    pass
+            
+            # BUSCA 2: Busca textual adicional
+            search_result_keywords = []
+            
+            # Se houver nomes próprios detectados, buscar por eles
+            if nomes_proprios:
+                try:
+                    from qdrant_client.models import Filter, FieldCondition, MatchText
+                    
+                    # Buscar documentos que contenham os nomes próprios no conteúdo
+                    filter_conditions = []
+                    for nome in nomes_proprios:
+                        filter_conditions.append(
+                            FieldCondition(
+                                key="content",
+                                match=MatchText(text=nome)
+                            )
+                        )
+                    
+                    # Usar AND (must) para nomes próprios
+                    filter_obj = Filter(must=filter_conditions)
+                    logger.info(f"🔍 Busca híbrida com AND para nomes próprios: {nomes_proprios}")
+                    
+                    search_result_keywords = self.qdrant_client.search(
+                        collection_name=self.collection_name,
+                        query_vector=query_vector,
+                        query_filter=filter_obj,
+                        limit=limit * 2,
+                        score_threshold=0.0  # Aceitar qualquer score se tem o nome
+                    )
+                    
+                    logger.info(f"🔍 Busca por nomes próprios ({nomes_proprios}) retornou {len(search_result_keywords)} chunks")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro na busca por palavras-chave: {e}")
+            
+            # BUSCA 3: Para queries sem nomes próprios detectados e com 1 palavra significativa
+            # (ex: "o que é cusco?" -> palavra significativa: "cusco")
+            # fazer busca textual case-insensitive
+            if not nomes_proprios and len(palavras_limpas) <= 2:
+                try:
+                    from qdrant_client.models import Filter, FieldCondition, MatchText
+                    
+                    # Buscar pela query limpa (sem stopwords/pontuação)
+                    logger.info(f"🔍 Query sem nome próprio detectado: '{query_limpa}' - fazendo busca textual")
+                    
+                    for palavra in palavras_limpas:
+                        if len(palavra) > 2:  # Ignorar palavras muito curtas
+                            try:
+                                # Buscar no content e title
+                                filter_obj = Filter(
+                                    should=[
+                                        FieldCondition(key="content", match=MatchText(text=palavra)),
+                                        FieldCondition(key="title", match=MatchText(text=palavra))
+                                    ]
+                                )
+                                
+                                keywords_result = self.qdrant_client.search(
+                                    collection_name=self.collection_name,
+                                    query_vector=query_vector,
+                                    query_filter=filter_obj,
+                                    limit=limit * 2,
+                                    score_threshold=0.0
+                                )
+                                
+                                logger.info(f"🔍 Busca textual por '{palavra}' retornou {len(keywords_result)} chunks")
+                                
+                                # Adicionar aos resultados com boost
+                                for hit in keywords_result:
+                                    if hit.id not in [r.id for r in search_result_keywords]:
+                                        hit.score = hit.score * 2.0  # Boost para match textual
+                                        search_result_keywords.append(hit)
+                                        
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro na busca textual por '{palavra}': {e}")
+                                
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro na busca textual geral: {e}")
+            
+            # Combinar resultados (sem duplicatas por ID)
+            combined_ids = set()
+            combined_results = []
+            
+            for hit in search_result:
+                if hit.id not in combined_ids:
+                    combined_results.append(hit)
+                    combined_ids.add(hit.id)
+            
+            for hit in search_result_keywords:
+                if hit.id not in combined_ids:
+                    # Aplicar boost para resultados com nomes próprios
+                    hit.score = hit.score * 1.5
+                    logger.info(f"✨ Adicionado por nome próprio: '{hit.payload.get('title')}' chunk {hit.payload.get('chunk_index')} (score: {hit.score:.4f})")
+                    combined_results.append(hit)
+                    combined_ids.add(hit.id)
+            
+            logger.info(f"🔗 Após combinar: {len(combined_results)} chunks únicos")
+            
+            # Usar combined_results em vez de search_result
+            search_result = combined_results
+            
+            logger.info(f"📡 Top 15 resultados combinados:")
+            for i, hit in enumerate(sorted(search_result, key=lambda x: x.score, reverse=True)[:15], 1):
+                logger.info(f"   {i:2d}. {hit.payload.get('title', 'N/A'):30s} score={hit.score:.4f}")
             
             # Extrair termos da query para boosting
             import re
@@ -499,27 +728,22 @@ class LangChainWikipediaService:
             # Reordenar por score após boosting
             results = sorted(results, key=lambda x: x.score, reverse=True)
             
-            # Remover duplicatas (manter apenas o chunk com maior score de cada artigo)
-            seen_titles = {}
-            unique_results = []
-            for result in results:
-                if result.title not in seen_titles:
-                    seen_titles[result.title] = result
-                    unique_results.append(result)
-                else:
-                    # Se encontrar duplicata, manter a de maior score
-                    if result.score > seen_titles[result.title].score:
-                        # Substituir na lista
-                        idx = unique_results.index(seen_titles[result.title])
-                        unique_results[idx] = result
-                        seen_titles[result.title] = result
-            
-            results = unique_results
-            
-            # Aplicar limite após deduplica��ão
+            # NÃO remover duplicatas - permitir múltiplos chunks do mesmo artigo
+            # Isso é importante para queries técnicas onde a informação pode estar em chunks específicos
+            # Aplicar limite diretamente
             results = results[:limit]
             
-            logger.info(f"✅ Encontrou {len(results)} documentos únicos (top scores: {[round(r.score, 4) for r in results[:3]]})")
+            if len(results) == 0:
+                logger.warning(f"⚠️⚠️⚠️ RETORNANDO 0 RESULTADOS PARA '{query}' ⚠️⚠️⚠️")
+                logger.warning(f"   Query limpa: '{query_limpa}'")
+                logger.warning(f"   Palavras limpas: {palavras_limpas}")
+                logger.warning(f"   Nomes próprios: {nomes_proprios}")
+                logger.warning(f"   Busca semântica: {len(search_result)} chunks")
+                logger.warning(f"   Busca keywords: {len(search_result_keywords)} chunks")
+            else:
+                logger.info(f"✅ Encontrou {len(results)} chunks (top scores: {[round(r.score, 4) for r in results[:3]]})")
+                logger.info(f"📄 Artigos: {list(set([r.title for r in results]))}")
+            
             return results
             
         except Exception as e:

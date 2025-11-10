@@ -9,13 +9,21 @@ import time
 import logging
 import requests
 import uuid
-import hashlib
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import json
 
 # LangChain integration
 from .langchainWikipediaService import langchain_wikipedia_service, WikipediaDocument
+
+# Utilitários
+from .wikipedia_utils import (
+    WikipediaAPIClient,
+    TextProcessor,
+    QdrantHelper,
+    WikipediaDataValidator,
+    MetricsCollector
+)
 
 try:
     from qdrant_client import QdrantClient
@@ -71,6 +79,13 @@ class WikipediaOfflineService:
         self.ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
         self.model_name = os.getenv("LLM_MODEL", "qwen2.5:7b")
         self._initialized = False
+        
+        # Inicializar utilitários
+        self.api_client = WikipediaAPIClient()
+        self.text_processor = TextProcessor()
+        self.qdrant_helper = QdrantHelper()
+        self.validator = WikipediaDataValidator()
+        self.metrics = MetricsCollector()
         
     def inicializar(self):
         """Inicializa todos os componentes"""
@@ -179,6 +194,11 @@ class WikipediaOfflineService:
                 logger.warning(f"⚠️ Artigo '{titulo}' não encontrado")
                 return 0
             
+            # Validar artigo
+            if not self.validator.validar_artigo(artigo):
+                logger.warning(f"⚠️ Artigo '{titulo}' não passou na validação")
+                return 0
+            
             logger.info(f"✅ Artigo encontrado: {artigo['title']}, extract length: {len(artigo.get('extract', ''))}, content length: {len(artigo.get('content', ''))}")
             
             # Usar LangChain para processamento
@@ -197,6 +217,9 @@ class WikipediaOfflineService:
             # Ingerir usando LangChain service
             chunks_criados = langchain_wikipedia_service.ingerir_documentos([documento])
             logger.info(f"✅ {chunks_criados} chunks criados com LangChain para '{titulo}'")
+            
+            # Registrar métrica
+            self.metrics.record_article_processed(chunks_criados)
             
             # Também adicionar ao sistema legado para compatibilidade
             chunks_legado = self._processar_e_armazenar_artigo(artigo)
@@ -256,25 +279,17 @@ class WikipediaOfflineService:
             return {titulo: 0 for titulo in titulos}
     
     def adicionar_chunk_direto(self, chunk_data: Dict) -> bool:
-        """Adiciona um chunk já processado diretamente ao banco vetorial"""
+        """Adiciona um chunk já processado diretamente ao banco vetorial - usa QdrantHelper"""
         try:
-            # Gerar ID único como UUID
-            chunk_id = str(uuid.uuid4())
+            # Validar chunk
+            if not self.validator.validar_chunk(chunk_data):
+                logger.error("❌ Chunk inválido - campos obrigatórios ausentes")
+                return False
             
-            # Preparar payload para Qdrant (sem embedding por enquanto, igual ao método existente)
-            payload = {
-                "content": chunk_data['content'],
-                "title": chunk_data['title'],
-                "url": chunk_data['url'],
-                "chunk_index": chunk_data.get('chunk_index', 0),
-                "total_chunks": chunk_data.get('total_chunks', 1),
-                "article_id": str(chunk_data.get('article_id', '')),
-                "timestamp": chunk_data.get('timestamp', ''),
-                "source": chunk_data.get('source', 'wikipedia_dump')
-            }
-            
-            # Usar um vetor dummy (todos zeros) por enquanto, como no método existente
-            dummy_vector = [0.0] * 384  # 384 dimensões
+            # Preparar usando helper
+            chunk_id = self.qdrant_helper.gerar_id_unico()
+            payload = self.qdrant_helper.criar_payload_chunk(chunk_data)
+            dummy_vector = self.qdrant_helper.criar_vetor_dummy()
             
             # Criar ponto para Qdrant
             point = PointStruct(
@@ -284,7 +299,7 @@ class WikipediaOfflineService:
             )
             
             # Inserir no Qdrant
-            resultado = self.client.upsert(
+            self.client.upsert(
                 collection_name=self.collection_name,
                 points=[point]
             )
@@ -296,61 +311,8 @@ class WikipediaOfflineService:
             return False
     
     def _buscar_artigo_wikipedia(self, titulo: str) -> Optional[Dict]:
-        """Busca artigo na Wikipedia API"""
-        try:
-            # Headers com User-Agent apropriado conforme política da Wikipedia
-            headers = {
-                'User-Agent': 'WikipediaOfflineRAG/2.0 (Educational project; Python/requests) Contact: github.com/ekotuja-AI',
-                'Accept': 'application/json'
-            }
-            
-            # URL da API da Wikipedia em português
-            url = "https://pt.wikipedia.org/api/rest_v1/page/summary/" + titulo.replace(" ", "_")
-            
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Buscar conteúdo completo
-                content_url = f"https://pt.wikipedia.org/api/rest_v1/page/mobile-sections/{titulo.replace(' ', '_')}"
-                content_response = requests.get(content_url, headers=headers, timeout=10)
-                
-                content = ""
-                if content_response.status_code == 200:
-                    content_data = content_response.json()
-                    sections = content_data.get('sections', [])
-                    content_parts = []
-                    for section in sections:
-                        if section.get('text'):
-                            # Remover tags HTML do texto
-                            import re
-                            text = section['text']
-                            # Remove tags HTML
-                            text = re.sub(r'<[^>]+>', '', text)
-                            # Remove múltiplos espaços
-                            text = re.sub(r'\s+', ' ', text)
-                            content_parts.append(text.strip())
-                    content = " ".join(content_parts)
-                
-                # Se content está vazio, usar extract
-                if not content.strip():
-                    content = data.get('extract', '')
-                    logger.warning(f"⚠️ Usando apenas extract para '{titulo}' (sem conteúdo completo)")
-                
-                return {
-                    'title': data.get('title', titulo),
-                    'extract': data.get('extract', ''),
-                    'content': content,
-                    'url': data.get('content_urls', {}).get('desktop', {}).get('page', ''),
-                    'description': data.get('description', '')
-                }
-            else:
-                logger.warning(f"⚠️ Wikipedia API retornou status {response.status_code} para '{titulo}'")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar artigo na Wikipedia: {e}")
-            return None
+        """Busca artigo na Wikipedia API com conteúdo completo - delegado ao WikipediaAPIClient"""
+        return self.api_client.buscar_artigo_completo(titulo)
     
     def _processar_e_armazenar_artigo(self, artigo: Dict) -> int:
         """Processa artigo em chunks e armazena no Qdrant"""
@@ -592,9 +554,13 @@ class WikipediaOfflineService:
     
     def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3) -> RAGResponse:
         """Sistema RAG com Ollama"""
+        start_time = time.time()
+        
         try:
-            # Buscar mais documentos para melhor contexto
+            # Fase 1: Buscar documentos
+            search_start = time.time()
             documentos = self.buscar_artigos(pergunta, limit=max_chunks)
+            search_time = time.time() - search_start
             
             # Log para debug
             if documentos:
@@ -619,20 +585,20 @@ class WikipediaOfflineService:
                     collection_info = self.client.get_collection(self.collection_name)
                     total_points = collection_info.points_count
                     
-                    # Threshold adaptativo baseado no tamanho da base
+                    # Threshold adaptativo baseado no tamanho da base (REDUZIDO para aceitar mais resultados)
                     if total_points < 10:
-                        MIN_SIMILARITY_SCORE = 0.08  # 8% para bases muito pequenas (< 10 docs)
+                        MIN_SIMILARITY_SCORE = 0.05  # 5% para bases muito pequenas (< 10 docs)
                         logger.info(f"📊 Base pequena ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
                     elif total_points < 50:
-                        MIN_SIMILARITY_SCORE = 0.15  # 15% para bases pequenas (10-50 docs)
+                        MIN_SIMILARITY_SCORE = 0.08  # 8% para bases pequenas (10-50 docs)
                         logger.info(f"📊 Base média ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
                     else:
-                        MIN_SIMILARITY_SCORE = 0.25  # 25% para bases grandes (50+ docs)
+                        MIN_SIMILARITY_SCORE = 0.12  # 12% para bases grandes (50+ docs)
                         logger.info(f"📊 Base grande ({total_points} chunks) - usando threshold {MIN_SIMILARITY_SCORE}")
                 else:
-                    MIN_SIMILARITY_SCORE = 0.15
+                    MIN_SIMILARITY_SCORE = 0.08
             except Exception as e:
-                MIN_SIMILARITY_SCORE = 0.60
+                MIN_SIMILARITY_SCORE = 0.08
                 logger.warning(f"Erro ao verificar tamanho da base: {e}")
             
             # Estratégia 1: Aplicar boosting para matches exatos no título ANTES de filtrar
@@ -716,23 +682,11 @@ class WikipediaOfflineService:
                     model_info={"status": "low_similarity", "model": self.model_name}
                 )
             
-            # Remover duplicatas (manter apenas o chunk com maior score de cada artigo)
-            seen_titles = {}
-            unique_docs = []
-            for doc in documentos_relevantes:
-                if doc.title not in seen_titles:
-                    seen_titles[doc.title] = doc
-                    unique_docs.append(doc)
-                else:
-                    # Se encontrar duplicata, manter a de maior score
-                    if doc.score > seen_titles[doc.title].score:
-                        idx = unique_docs.index(seen_titles[doc.title])
-                        unique_docs[idx] = doc
-                        seen_titles[doc.title] = doc
+            # NÃO remover duplicatas - permitir múltiplos chunks do mesmo artigo
+            # Isso é crucial para queries técnicas onde informação específica pode estar em chunks diferentes
+            documentos = documentos_relevantes
             
-            documentos = unique_docs
-            
-            logger.info(f"📚 Encontrou {len(documentos)} documentos únicos para RAG")
+            logger.info(f"📚 Encontrou {len(documentos)} chunks para RAG (artigos: {list(set([d.title for d in documentos]))})")
 
             
             # Preparar contexto com mais conteúdo por documento (600 chars)
@@ -748,81 +702,107 @@ class WikipediaOfflineService:
             context = "\n\n".join(context_parts)
             logger.info(f"📝 Contexto preparado com {len(context)} caracteres de {len(documentos)} fontes")
             
-            # Gerar resposta com Ollama
+            # Fase 2: Gerar resposta com Ollama
+            logger.info(f"🤖 Chamando Ollama com modelo {self.model_name}...")
+            generation_start = time.time()
             resposta = self._generate_answer_with_ollama(pergunta, context)
+            generation_time = time.time() - generation_start
+            total_time = time.time() - start_time
+            
+            logger.info(f"✅ Resposta gerada com sucesso ({len(resposta)} caracteres)")
+            logger.info(f"⏱️ Tempos - Busca: {search_time:.2f}s, Geração: {generation_time:.2f}s, Total: {total_time:.2f}s")
             
             return RAGResponse(
                 question=pergunta,
                 answer=resposta,
                 sources=documentos,
                 reasoning=f"Resposta gerada com {self.model_name} baseada em {len(documentos)} fontes",
-                model_info={"status": "ok", "model": self.model_name}
+                model_info={
+                    "status": "ok", 
+                    "model": self.model_name,
+                    "timing": {
+                        "search_time": round(search_time, 2),
+                        "generation_time": round(generation_time, 2),
+                        "total_time": round(total_time, 2)
+                    }
+                }
             )
             
         except Exception as e:
-            logger.error(f"❌ Erro no RAG: {e}")
+            logger.error(f"❌ Erro no RAG: {e}", exc_info=True)  # exc_info=True mostra traceback completo
             return RAGResponse(
                 question=pergunta,
                 answer=f"Erro ao processar pergunta: {str(e)}",
                 sources=[],
                 reasoning=f"Erro técnico: {str(e)}",
-                model_info={"status": "error", "model": "none"}
+                model_info={"status": "error", "model": "none", "error": str(e)}
             )
     
     def _generate_answer_with_ollama(self, question: str, context: str) -> str:
         """Gera resposta usando Ollama"""
-        try:
-            # Limitar o tamanho do contexto para evitar timeouts
-            max_context_length = 3000  # Aproximadamente 3000 caracteres
-            if len(context) > max_context_length:
-                context = context[:max_context_length] + "...\n[Contexto truncado para melhor performance]"
-                logger.info(f"📝 Contexto truncado para {max_context_length} caracteres")
-            
-            prompt = f"""Você é um assistente especializado em responder perguntas usando documentos da Wikipedia em inglês, mas SEMPRE respondendo em português brasileiro.
+        # Limitar o tamanho do contexto para evitar timeouts
+        max_context_length = 3000  # Aproximadamente 3000 caracteres
+        if len(context) > max_context_length:
+            context = context[:max_context_length] + "...\n[Contexto truncado para melhor performance]"
+            logger.info(f"📝 Contexto truncado para {max_context_length} caracteres")
+        
+        prompt = f"""Você é um assistente especializado em responder perguntas usando informações de artigos da Wikipedia.
 
-CONTEXTO DA WIKIPEDIA (pode estar em inglês):
+INFORMAÇÕES DOS ARTIGOS:
 {context}
 
 PERGUNTA: {question}
 
 INSTRUÇÕES IMPORTANTES:
-1. Responda em PORTUGUÊS BRASILEIRO (mesmo que o contexto esteja em inglês)
-2. Use APENAS as informações do contexto acima para responder
-3. Cite trechos específicos do contexto na sua resposta
-4. Seja detalhado e informativo (mínimo 3-4 frases)
-5. Traduza termos técnicos e conceitos para português
-6. Estruture a resposta em parágrafos quando necessário
-7. Se o contexto não tiver informação suficiente, diga "Com base no contexto fornecido..." e explique o que foi encontrado
+1. Responda em PORTUGUÊS BRASILEIRO (mesmo que o texto original esteja em inglês)
+2. Use APENAS as informações dos artigos acima
+3. Responda de forma DIRETA e NATURAL, como se estivesse explicando para alguém
+4. NÃO mencione "contexto", "artigos", "fontes" ou "informações fornecidas"
+5. NÃO comece com frases como "não encontrei" ou "de acordo com informações fornecidas"
+6. Se os artigos mencionam pessoas, eventos ou fatos relacionados à pergunta, EXPLIQUE-os diretamente
+7. Para perguntas sobre "quem viveu/morou/estava em [local]", mencione os povos, líderes ou grupos mencionados
+8. Apenas diga "Não encontrei informações" se realmente NÃO HOUVER NENHUMA menção relevante
+9. Seja detalhado e informativo (3-5 frases quando houver informação)
+10. Traduza termos técnicos para português
+11. Estruture em parágrafos quando necessário
 
-FORMATO DA RESPOSTA:
-- Comece respondendo diretamente a pergunta
-- Depois elabore com detalhes do contexto
-- Finalize com informação adicional relevante
+EXEMPLOS:
+Pergunta: "quem foi John Doe?"
+❌ ERRADO: "Não encontrei informações suficientes. O artigo menciona John Doe como..."
+✅ CORRETO: "John Doe foi um historiador que..."
 
-RESPOSTA EM PORTUGUÊS:"""
+Pergunta: "quem viveu em Roma?"
+❌ ERRADO: "Não encontrei informações sobre quem viveu em Roma"
+✅ CORRETO: "Roma foi habitada pelos romanos, que fundaram um império..."
 
-            logger.info(f"🤖 Enviando prompt para Ollama (tamanho: {len(prompt)} caracteres)")
-            
-            url = f"http://{self.ollama_host}:{self.ollama_port}/api/generate"
-            payload = {
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.8,      # Mais criativo para respostas detalhadas
-                    "top_p": 0.95,          # Maior diversidade vocabular
-                    "num_predict": 800,     # Respostas mais longas (até 800 tokens)
-                    "num_ctx": 8192,        # Contexto grande (qwen2.5 suporta muito)
-                    "repeat_penalty": 1.15, # Evitar repetições
-                    "top_k": 50,            # Mais opções de palavras
-                    "stop": ["\n\nPERGUNTA:", "\n\nCONTEXTO:"]  # Parar em nova seção
-                }
+RESPONDA DIRETAMENTE:"""
+
+        logger.info(f"🤖 Enviando prompt para Ollama (tamanho: {len(prompt)} caracteres)")
+        
+        url = f"http://{self.ollama_host}:{self.ollama_port}/api/generate"
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.8,      # Mais criativo para respostas detalhadas
+                "top_p": 0.95,          # Maior diversidade vocabular
+                "num_predict": 800,     # Respostas mais longas (até 800 tokens)
+                "num_ctx": 8192,        # Contexto grande (qwen2.5 suporta muito)
+                "repeat_penalty": 1.15, # Evitar repetições
+                "top_k": 50,            # Mais opções de palavras
+                "stop": ["\n\nPERGUNTA:", "\n\nCONTEXTO:"]  # Parar em nova seção
             }
-            
-            logger.info(f"⏱️ Aguardando resposta do Ollama (timeout: 600s)...")
-            start_time = time.time()
-            response = requests.post(url, json=payload, timeout=600)  # Aumentado para 10 minutos
+        }
+        
+        logger.info(f"⏱️ Aguardando resposta do Ollama (modelo: {self.model_name}, timeout: 600s)...")
+        start_time = time.time()
+        
+        try:
+            response = requests.post(url, json=payload, timeout=600)
             end_time = time.time()
+            
+            logger.info(f"📡 Ollama respondeu com status {response.status_code} em {end_time - start_time:.1f}s")
             
             if response.status_code == 200:
                 data = response.json()
@@ -831,14 +811,18 @@ RESPOSTA EM PORTUGUÊS:"""
                 logger.info(f"✅ Resposta gerada em {processing_time:.1f}s (tamanho: {len(answer)} caracteres)")
                 return answer
             else:
-                logger.error(f"❌ Ollama respondeu com status {response.status_code}")
-                return "Erro: LLM não disponível no momento."
+                error_text = response.text[:200] if response.text else "sem detalhes"
+                logger.error(f"❌ Ollama erro {response.status_code}: {error_text}")
+                return f"Erro: LLM respondeu com status {response.status_code}"
                 
         except requests.exceptions.Timeout:
-            logger.error(f"⏰ Timeout ao gerar resposta (>600s). Tente uma pergunta mais específica.")
-            return "Timeout: A pergunta demorou muito para ser processada. Tente ser mais específico ou use menos contexto."
+            logger.error(f"⏰ Timeout ao gerar resposta (>600s)")
+            return "Timeout: A pergunta demorou muito para ser processada. Tente ser mais específico."
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"🔌 Erro de conexão com Ollama: {e}")
+            return "Erro: Não foi possível conectar ao serviço de LLM."
         except Exception as e:
-            logger.error(f"❌ Erro ao gerar resposta com Ollama: {e}")
+            logger.error(f"❌ Erro inesperado ao chamar Ollama: {e}", exc_info=True)
             return f"Erro ao gerar resposta: {str(e)}"
     
     def _get_sample_results(self, query: str, limit: int) -> List[SearchResult]:
@@ -1008,9 +992,17 @@ RESPOSTA EM PORTUGUÊS:"""
             "colecoes": colecoes_count,
             "modelo_embedding_carregado": True,  # ajuste conforme lógica real
             "text_splitter_configurado": True,    # ajuste conforme lógica real
-            "openai_configurado": False,          # ajuste conforme lógica real
+            "openai_configurado": False,
             "inicializado": self._initialized
         }
+    
+    def obter_metricas(self) -> Dict:
+        """Retorna métricas coletadas pelo serviço"""
+        return self.metrics.get_metrics()
+    
+    def resetar_metricas(self):
+        """Reseta todas as métricas coletadas"""
+        self.metrics.reset_metrics()
     
     def _test_ollama_connection(self) -> bool:
         """Testa se Ollama está respondendo"""

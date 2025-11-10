@@ -1,5 +1,12 @@
 import logging
+
+# Configurar logging com nivel DEBUG para ver todos os logs
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
 """
 API Wikipedia Offline - Versão Funcional
 

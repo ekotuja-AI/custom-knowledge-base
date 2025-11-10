@@ -93,7 +93,7 @@ def test_dividir_em_chunks_texto_curto(self):
 ### Teste de Configuração
 ```python
 def test_api_config_values(self):
-    assert APIConfig.TITLE == "Dicionário Vetorial API"
+    assert APIConfig.TITLE == "Custom Knowledge Base API"
     assert APIConfig.VERSION == "1.0.0"
     assert APIConfig.PORT == 9000
 ```
@@ -153,7 +153,7 @@ Para adicionar novos testes:
 
 ---
 
-**Projeto:** Dicionário Vetorial - Wikipedia RAG System  
+**Projeto:** Custom Knowledge Base - Wikipedia RAG System  
 **Framework:** pytest 8.4.2  
 **Python:** 3.11.14  
 **Container:** offline_wikipedia_app

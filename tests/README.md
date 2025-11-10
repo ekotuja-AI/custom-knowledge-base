@@ -1,4 +1,4 @@
-# Testes Unitários - Dicionário Vetorial
+# Testes Unitários - Custom Knowledge Base
 
 Esta pasta contém os testes unitários e de integração leves para o projeto.
 

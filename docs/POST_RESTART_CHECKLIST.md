@@ -10,7 +10,7 @@
 
 2. **Subir containers:**
    ```bash
-   cd dicionario_vetorial
+   cd custom-knowledge-base
    docker-compose up -d
    ```
 

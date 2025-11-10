@@ -244,6 +244,47 @@
             background: #f8f9ff;
         }
 
+        /* Paginação */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 30px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .pagination-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .pagination-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .pagination-info {
+            font-size: 1.1em;
+            color: #333;
+            font-weight: 600;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -343,9 +384,9 @@
                 oninput="filtrarArtigos()"
             >
             <div class="filters">
-                <button class="filter-btn active" onclick="ordenar('alfabetica')">A-Z</button>
-                <button class="filter-btn" onclick="ordenar('chunks')">Mais Chunks</button>
-                <button class="filter-btn" onclick="ordenar('recentes')">Mais Recentes</button>
+                <button class="filter-btn active" onclick="ordenar('alfabetica', event)">A-Z</button>
+                <button class="filter-btn" onclick="ordenar('chunks', event)">Mais Chunks</button>
+                <button class="filter-btn" onclick="ordenar('recentes', event)">Mais Recentes</button>
             </div>
         </div>
 
@@ -354,6 +395,18 @@
         </div>
 
         <div id="articlesContainer" class="articles-grid" style="display: none;"></div>
+
+        <div id="pagination" class="pagination" style="display: none;">
+            <button class="pagination-btn" id="prevBtn" onclick="irParaPagina(paginaAtual - 1)">
+                ← Anterior
+            </button>
+            <div class="pagination-info">
+                <span id="paginacaoTexto">Página 1 de 1</span>
+            </div>
+            <button class="pagination-btn" id="nextBtn" onclick="irParaPagina(paginaAtual + 1)">
+                Próxima →
+            </button>
+        </div>
 
         <div id="noResults" class="no-results" style="display: none;">
             <div class="no-results-icon">🔍</div>
@@ -374,14 +427,53 @@
     </div>
 
     <script>
+        // Configuração da API
+        const API_BASE = window.location.origin;
+        
         let todosArtigos = [];
         let artigosFiltrados = [];
         let ordenacaoAtual = 'alfabetica';
+        
+        // Configuração de paginação
+        const ARTIGOS_POR_PAGINA = 50;
+        let paginaAtual = 1;
+        let totalPaginas = 1;
 
-        // Carregar artigos ao abrir a página
+        // NÃO carregar artigos automaticamente - apenas ao buscar/filtrar
         window.addEventListener('DOMContentLoaded', () => {
-            carregarArtigos();
+            // Carregar metadados mas não exibir artigos
+            carregarMetadados();
         });
+
+        async function carregarMetadados() {
+            const loading = document.getElementById('loadingContainer');
+            
+            loading.style.display = 'block';
+            loading.innerHTML = '<div>⏳ Carregando base de conhecimento...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/artigos`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                
+                todosArtigos = data.artigos || [];
+                artigosFiltrados = []; // Não filtrar nada inicialmente
+                
+                document.getElementById('totalArtigos').textContent = data.total || 0;
+                document.getElementById('totalChunks').textContent = data.total_chunks || 0;
+                document.getElementById('artigosFiltrados').textContent = 0;
+                
+                loading.style.display = 'none';
+                document.getElementById('articlesContainer').innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"><p style="font-size: 1.3em; color: #667eea; font-weight: 600;">🔍 Use a busca acima para encontrar artigos</p><p style="color: #999; margin-top: 10px;">Digite palavras-chave para filtrar os artigos da base</p></div>';
+                document.getElementById('articlesContainer').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Erro ao carregar metadados:', error);
+                loading.innerHTML = '<div style="color: #ff4444;">❌ Erro ao carregar base de conhecimento</div>';
+            }
+        }
 
         async function carregarArtigos() {
             const loading = document.getElementById('loadingContainer');
@@ -393,7 +485,10 @@
             noResults.style.display = 'none';
 
             try {
-                const response = await fetch('/artigos');
+                const response = await fetch(`${API_BASE}/artigos`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 const data = await response.json();
                 
                 todosArtigos = data.artigos || [];
@@ -415,7 +510,13 @@
             const busca = document.getElementById('searchInput').value.toLowerCase();
             
             if (!busca.trim()) {
-                artigosFiltrados = [...todosArtigos];
+                // Se busca vazia, não mostrar artigos
+                artigosFiltrados = [];
+                document.getElementById('articlesContainer').innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"><p style="font-size: 1.3em; color: #667eea; font-weight: 600;">🔍 Use a busca acima para encontrar artigos</p><p style="color: #999; margin-top: 10px;">Digite palavras-chave para filtrar os artigos da base</p></div>';
+                document.getElementById('articlesContainer').style.display = 'block';
+                document.getElementById('artigosFiltrados').textContent = 0;
+                document.getElementById('pagination').style.display = 'none';
+                return;
             } else {
                 artigosFiltrados = todosArtigos.filter(artigo => {
                     return artigo.title.toLowerCase().includes(busca) ||
@@ -423,17 +524,45 @@
                 });
             }
             
+            paginaAtual = 1; // Resetar para primeira página ao filtrar
             renderizarArtigos();
         }
 
-        function ordenar(tipo) {
+        function irParaPagina(pagina) {
+            if (pagina < 1 || pagina > totalPaginas) return;
+            paginaAtual = pagina;
+            renderizarArtigos();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function atualizarPaginacao() {
+            totalPaginas = Math.ceil(artigosFiltrados.length / ARTIGOS_POR_PAGINA);
+            
+            const paginacao = document.getElementById('pagination');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const paginacaoTexto = document.getElementById('paginacaoTexto');
+            
+            if (totalPaginas <= 1) {
+                paginacao.style.display = 'none';
+            } else {
+                paginacao.style.display = 'flex';
+                prevBtn.disabled = paginaAtual === 1;
+                nextBtn.disabled = paginaAtual === totalPaginas;
+                paginacaoTexto.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+            }
+        }
+
+        function ordenar(tipo, event) {
             ordenacaoAtual = tipo;
             
-            // Atualizar botões ativos
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
+            // Atualizar botões ativos (se chamado via clique)
+            if (event) {
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+            }
             
             switch(tipo) {
                 case 'alfabetica':
@@ -466,13 +595,22 @@
             if (artigosFiltrados.length === 0) {
                 container.style.display = 'none';
                 noResults.style.display = 'block';
+                document.getElementById('pagination').style.display = 'none';
                 return;
             }
             
             container.style.display = 'grid';
             noResults.style.display = 'none';
             
-            container.innerHTML = artigosFiltrados.map(artigo => `
+            // Calcular artigos da página atual
+            const inicio = (paginaAtual - 1) * ARTIGOS_POR_PAGINA;
+            const fim = inicio + ARTIGOS_POR_PAGINA;
+            const artigosPagina = artigosFiltrados.slice(inicio, fim);
+            
+            // Atualizar paginação
+            atualizarPaginacao();
+            
+            container.innerHTML = artigosPagina.map(artigo => `
                 <div class="article-card" onclick="abrirArtigo('${artigo.url}', '${escapeHtml(artigo.title)}')">
                     <div class="article-title">
                         📄 ${escapeHtml(artigo.title)}

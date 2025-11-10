@@ -17,7 +17,7 @@ class TestAPIConfig:
     
     def test_api_config_values(self):
         """Testa valores da configuração da API"""
-        assert APIConfig.TITLE == "Dicionário Vetorial API"
+        assert APIConfig.TITLE == "Custom Knowledge Base API"
         assert APIConfig.VERSION == "1.0.0"
         assert APIConfig.HOST == "0.0.0.0"
         assert APIConfig.PORT == 9000

@@ -1,4 +1,4 @@
-# 🐳 Guia de Implementação Docker - Dicionário Vetorial com LangChain
+# 🐳 Guia de Implementação Docker - Custom Knowledge Base com LangChain
 
 ## ⚠️ Status Atual
 O Docker Desktop está com problemas de I/O no filesystem, mas toda a implementação está pronta e testada.

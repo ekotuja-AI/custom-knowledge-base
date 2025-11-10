@@ -61,7 +61,7 @@ class PerguntarRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "pergunta": "O que é inteligência artificial e como funciona?",
-                "max_chunks": 5
+                "max_chunks": 10
             }
         }
     )
@@ -74,11 +74,11 @@ class PerguntarRequest(BaseModel):
         example="O que é inteligência artificial e como funciona?"
     )
     max_chunks: Optional[int] = Field(
-        default=5,
+        default=10,
         description="Número máximo de chunks de contexto para a resposta",
         ge=1,
-        le=10,
-        example=5
+        le=20,
+        example=10
     )
 
 
@@ -89,9 +89,9 @@ class WikipediaResultModel(BaseModel):
     url: str = Field(..., description="URL do artigo original na Wikipedia")
     score: float = Field(
         ...,
-        description="Score de similaridade semântica (0-3, maior é melhor, scores >1 indicam match exato no título)",
+        description="Score de similaridade semântica (0-10, maior é melhor, scores >1 indicam match exato no título)",
         ge=0.0,
-        le=3.0
+        le=10.0
     )
 
 

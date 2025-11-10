@@ -1,5 +1,5 @@
 """
-Configurações da API do Dicionário Vetorial
+Configurações da API do Custom Knowledge Base
 
 Este módulo contém as configurações centralizadas da aplicação.
 """
@@ -12,7 +12,7 @@ class APIConfig:
     """Configurações da API"""
     
     # Informações da API
-    TITLE = "Dicionário Vetorial API"
+    TITLE = "Custom Knowledge Base API"
     VERSION = "1.0.0"
     DESCRIPTION = """
     **API REST para busca semântica em dicionário usando embeddings e Qdrant**
