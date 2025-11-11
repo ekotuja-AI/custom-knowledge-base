@@ -8,6 +8,23 @@ incluindo modelos de request, response e validação de dados.
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
+from datetime import datetime
+
+# --- MULTIUSUÁRIO ---
+class User(BaseModel):
+    """Modelo de usuário para autenticação simples por email"""
+    id: Optional[int] = Field(None, description="ID do usuário no banco de dados")
+    email: str = Field(..., description="Email do usuário", min_length=5, max_length=120, example="usuario@email.com")
+    criado_em: Optional[datetime] = Field(None, description="Data de criação do usuário")
+
+class KnowledgeBase(BaseModel):
+    """Modelo para base de conhecimento personalizada do usuário"""
+    id: Optional[int] = Field(None, description="ID da base no banco de dados")
+    nome: str = Field(..., description="Nome da base de conhecimento", min_length=3, max_length=100, example="minha-wiki")
+    usuario_id: int = Field(..., description="ID do usuário dono da base")
+    qdrant_collection: str = Field(..., description="Nome da coleção no Qdrant para esta base")
+    criado_em: Optional[datetime] = Field(None, description="Data de criação da base")
+
 
 class BuscarRequest(BaseModel):
     """Modelo para requisição de busca semântica"""
@@ -74,11 +91,11 @@ class PerguntarRequest(BaseModel):
         example="O que é inteligência artificial e como funciona?"
     )
     max_chunks: Optional[int] = Field(
-        default=10,
+        default=30,
         description="Número máximo de chunks de contexto para a resposta",
         ge=1,
-        le=20,
-        example=10
+        le=50,
+        example=30
     )
 
 
@@ -110,7 +127,16 @@ class BuscarResponse(BaseModel):
                         "score": 0.9234
                     }
                 ],
-                "tempo_busca_ms": 45.2
+                "tempo_busca_ms": 45.2,
+                "telemetria": {
+                    "tempo_busca_qdrant_ms": 40.5,
+                    "tempo_filtragem_ms": 4.7,
+                    "tempo_total_ms": 45.2,
+                    "query_length": 23,
+                    "limite_solicitado": 10,
+                    "resultados_antes_filtro": 15,
+                    "resultados_depois_filtro": 3
+                }
             }
         }
     )
@@ -119,6 +145,7 @@ class BuscarResponse(BaseModel):
     total_resultados: int = Field(..., description="Número total de resultados encontrados")
     resultados: List[WikipediaResultModel] = Field(..., description="Lista de resultados ordenados por relevância")
     tempo_busca_ms: Optional[float] = Field(None, description="Tempo de busca em milissegundos")
+    telemetria: Optional[dict] = Field(None, description="Telemetria detalhada da busca semântica")
 
 
 class RAGResponseModel(BaseModel):
@@ -147,6 +174,43 @@ class RAGResponseModel(BaseModel):
     fontes: List[WikipediaResultModel] = Field(..., description="Fontes utilizadas para gerar a resposta")
     raciocinio: str = Field(..., description="Explicação do processo de resposta")
     tempo_processamento_ms: Optional[float] = Field(None, description="Tempo total de processamento")
+    total_chunks: Optional[int] = Field(None, description="Total de chunks encontrados")
+    total_artigos: Optional[int] = Field(None, description="Total de artigos únicos encontrados")
+    telemetria: Optional[dict] = Field(None, description="Telemetria detalhada do LLM (tokens, velocidade, etc)")
+
+
+class BuscaPreviaResponse(BaseModel):
+    """Modelo para resposta de busca prévia (antes de gerar resposta com LLM)"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "pergunta": "O que é Python?",
+                "encontrou_resultados": True,
+                "total_chunks": 15,
+                "total_artigos": 3,
+                "fontes": [],
+                "tempo_busca_ms": 125.5,
+                "telemetria": {
+                    "tempo_embedding_ms": 50.2,
+                    "tempo_busca_qdrant_ms": 45.3,
+                    "tempo_processamento_ms": 30.0,
+                    "tempo_total_ms": 125.5,
+                    "query_length": 16,
+                    "max_chunks_solicitados": 30,
+                    "chunks_encontrados": 15,
+                    "artigos_encontrados": 3
+                }
+            }
+        }
+    )
+    
+    pergunta: str = Field(..., description="Pergunta original")
+    encontrou_resultados: bool = Field(..., description="Se encontrou resultados relevantes")
+    total_chunks: int = Field(..., description="Total de chunks encontrados")
+    total_artigos: int = Field(..., description="Total de artigos únicos encontrados")
+    fontes: List[WikipediaResultModel] = Field(..., description="Fontes encontradas na busca")
+    tempo_busca_ms: float = Field(..., description="Tempo da busca em milissegundos")
+    telemetria: Optional[dict] = Field(None, description="Telemetria detalhada da busca semântica")
 
 
 class AdicionarArtigoResponse(BaseModel):

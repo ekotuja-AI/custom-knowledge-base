@@ -193,6 +193,10 @@ class QdrantRetriever(BaseRetriever):
 
 
 class LangChainWikipediaService:
+    def _criar_colecao(self):
+        """Cria a coleção padrão no Qdrant se não existir"""
+        if self.qdrant_client is not None:
+            self.criar_colecao_custom(self.collection_name, self.embedding_dimension)
     """Serviço Wikipedia com LangChain completo (com fallback)"""
     
     def __init__(self):
@@ -306,29 +310,28 @@ class LangChainWikipediaService:
             )
             logger.info("✅ TextSplitter fallback configurado")
     
-    def _criar_colecao(self):
-        """Cria coleção no Qdrant se não existir"""
+    def criar_colecao_custom(self, collection_name: str, embedding_dimension: Optional[int] = None):
+        """Cria coleção Qdrant customizada para multiusuário"""
+        if embedding_dimension is None:
+            embedding_dimension = self.embedding_dimension
         try:
             collections = self.qdrant_client.get_collections()
             collection_names = [col.name for col in collections.collections]
-            
-            if self.collection_name not in collection_names:
-                logger.info(f"📦 Criando coleção '{self.collection_name}'")
-                
+            if collection_name not in collection_names:
+                logger.info(f"📦 Criando coleção '{collection_name}'")
                 self.qdrant_client.create_collection(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     vectors_config=VectorParams(
-                        size=self.embedding_dimension,
+                        size=embedding_dimension,
                         distance=Distance.COSINE
                     )
                 )
-                
                 # Criar índice de texto no campo page_content para busca textual
                 logger.info("📇 Criando índice de texto para busca textual...")
                 try:
                     from qdrant_client.models import TextIndexParams, TokenizerType
                     self.qdrant_client.create_payload_index(
-                        collection_name=self.collection_name,
+                        collection_name=collection_name,
                         field_name="page_content",
                         field_schema=TextIndexParams(
                             type="text",
@@ -341,33 +344,11 @@ class LangChainWikipediaService:
                     logger.info("✅ Índice de texto criado com sucesso")
                 except Exception as idx_error:
                     logger.warning(f"⚠️ Erro ao criar índice de texto: {idx_error}")
-                
-                logger.info(f"✅ Coleção '{self.collection_name}' criada")
+                logger.info(f"✅ Coleção '{collection_name}' criada")
             else:
-                logger.info(f"📦 Coleção '{self.collection_name}' já existe")
-                
-                # Verificar se o índice de texto existe, se não, criar
-                try:
-                    from qdrant_client.models import TextIndexParams, TokenizerType
-                    logger.info("🔍 Verificando índice de texto...")
-                    self.qdrant_client.create_payload_index(
-                        collection_name=self.collection_name,
-                        field_name="page_content",
-                        field_schema=TextIndexParams(
-                            type="text",
-                            tokenizer=TokenizerType.WORD,
-                            min_token_len=2,
-                            max_token_len=20,
-                            lowercase=True
-                        ),
-                        wait=False
-                    )
-                    logger.info("✅ Índice de texto verificado/criado")
-                except Exception as idx_error:
-                    logger.debug(f"Índice já existe ou erro: {idx_error}")
-                
+                logger.info(f"📦 Coleção '{collection_name}' já existe")
         except Exception as e:
-            logger.error(f"❌ Erro ao criar coleção: {e}")
+            logger.error(f"❌ Erro ao criar coleção custom: {e}")
             raise
     
     def _configurar_retriever(self):
@@ -475,6 +456,13 @@ class LangChainWikipediaService:
     def _inserir_lote(self, points: List[PointStruct]):
         """Insere lote de pontos no Qdrant"""
         try:
+            # Verificar se collection existe, criar se necessário
+            try:
+                self.qdrant_client.get_collection(self.collection_name)
+            except Exception:
+                logger.warning(f"⚠️ Collection '{self.collection_name}' não existe, criando...")
+                self._criar_colecao()
+            
             self.qdrant_client.upsert(
                 collection_name=self.collection_name,
                 points=points
@@ -516,7 +504,10 @@ class LangChainWikipediaService:
             except Exception as e:
                 logger.error(f"❌ Erro ao acessar coleção: {e}")
                 return []
-            
+                # Log dos termos buscados
+                palavra_norm = normalizar_texto(palavra)
+                logger.info(f"🔍 [Busca textual] Termo original: '{palavra}' | Termo normalizado: '{palavra_norm}'")
+
             # Detectar nomes próprios (palavras com maiúsculas)
             import re
             palavras = query.split()
@@ -628,15 +619,16 @@ class LangChainWikipediaService:
                 except Exception as e:
                     logger.warning(f"⚠️ Erro na busca por palavras-chave: {e}")
             
-            # BUSCA 3: Para queries sem nomes próprios detectados e com 1 palavra significativa
+            # BUSCA 3: Para queries sem nomes próprios detectados e com 1-2 palavras significativas
             # (ex: "o que é cusco?" -> palavra significativa: "cusco")
             # fazer busca textual case-insensitive
-            if not nomes_proprios and len(palavras_limpas) <= 2:
+            # MODIFICADO: sempre fazer busca textual para queries curtas, independente de maiúsculas
+            if len(palavras_limpas) <= 3:  # Aumentado de 2 para 3 para capturar mais casos
                 try:
                     from qdrant_client.models import Filter, FieldCondition, MatchText
                     
                     # Buscar pela query limpa (sem stopwords/pontuação)
-                    logger.info(f"🔍 Query sem nome próprio detectado: '{query_limpa}' - fazendo busca textual")
+                    logger.info(f"🔍 Query com {len(palavras_limpas)} palavras: '{query_limpa}' - fazendo busca textual")
                     
                     for palavra in palavras_limpas:
                         if len(palavra) > 2:  # Ignorar palavras muito curtas
@@ -699,9 +691,18 @@ class LangChainWikipediaService:
             
             # Extrair termos da query para boosting
             import re
+            import unicodedata
+            
+            def normalizar_texto(texto):
+                """Remove acentos e normaliza texto para comparação"""
+                texto_nfd = unicodedata.normalize('NFD', texto)
+                texto_sem_acento = ''.join(c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+                return texto_sem_acento.lower()
+            
             stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
             termos_query = [re.sub(r'[^\w\s]', '', t.lower()) for t in query.split() if t.lower() not in stopwords]
             termos_query = [t for t in termos_query if len(t) > 2]
+            termos_query_normalizados = [normalizar_texto(t) for t in termos_query]
             
             # Converter para SearchResult e aplicar boosting
             results = []
@@ -718,8 +719,18 @@ class LangChainWikipediaService:
                 )
                 
                 # Aplicar boosting de 3x para matches exatos no título
-                titulo_lower = result.title.lower()
-                if termos_query and any(termo == titulo_lower or titulo_lower in termos_query for termo in termos_query):
+                titulo_normalizado = normalizar_texto(result.title)
+                conteudo_normalizado = normalizar_texto(result.content[:200])  # Primeiros 200 chars
+                
+                # Verificar se algum termo normalizado aparece no título ou conteúdo normalizado
+                tem_match = False
+                if termos_query_normalizados:
+                    for termo_norm in termos_query_normalizados:
+                        if termo_norm in titulo_normalizado or termo_norm in conteudo_normalizado:
+                            tem_match = True
+                            break
+                
+                if tem_match:
                     result.score = result.score * 3.0
                     logger.info(f"🚀 Boosting aplicado: '{result.title}' - score {hit.score:.4f} → {result.score:.4f}")
                 
@@ -733,18 +744,25 @@ class LangChainWikipediaService:
             # Aplicar limite diretamente
             results = results[:limit]
             
-            if len(results) == 0:
+            # Unificar chunks por artigo, mantendo apenas o melhor score e um trecho resumido
+            artigo_dict = {}
+            for r in results:
+                if r.title not in artigo_dict:
+                    artigo_dict[r.title] = r
+                else:
+                    if r.score > artigo_dict[r.title].score:
+                        artigo_dict[r.title] = r
+            resultados_unificados = []
+            for artigo in artigo_dict.values():
+                artigo.content = artigo.content[:200] + ("..." if len(artigo.content) > 200 else "")
+                resultados_unificados.append(artigo)
+            resultados_unificados = sorted(resultados_unificados, key=lambda x: x.score, reverse=True)[:limit]
+            if len(resultados_unificados) == 0:
                 logger.warning(f"⚠️⚠️⚠️ RETORNANDO 0 RESULTADOS PARA '{query}' ⚠️⚠️⚠️")
-                logger.warning(f"   Query limpa: '{query_limpa}'")
-                logger.warning(f"   Palavras limpas: {palavras_limpas}")
-                logger.warning(f"   Nomes próprios: {nomes_proprios}")
-                logger.warning(f"   Busca semântica: {len(search_result)} chunks")
-                logger.warning(f"   Busca keywords: {len(search_result_keywords)} chunks")
             else:
-                logger.info(f"✅ Encontrou {len(results)} chunks (top scores: {[round(r.score, 4) for r in results[:3]]})")
-                logger.info(f"📄 Artigos: {list(set([r.title for r in results]))}")
-            
-            return results
+                logger.info(f"✅ Encontrou {len(resultados_unificados)} artigos (top scores: {[round(r.score, 4) for r in resultados_unificados[:3]]})")
+                logger.info(f"📄 Artigos: {list(set([r.title for r in resultados_unificados]))}")
+            return resultados_unificados
             
         except Exception as e:
             logger.error(f"❌ Erro na busca: {e}")

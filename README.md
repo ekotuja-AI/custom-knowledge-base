@@ -426,6 +426,15 @@ docker exec ollama_server ollama list
 
 ---
 
+## 🆕 Novidades e Limpeza
+
+- Busca semântica agora é **acento/case-insensitive**: "indonesia" encontra "Indonésia"!
+- Filtro final do backend normaliza termos e títulos/conteúdo para garantir resultados robustos.
+- Limpeza automática: pastas de cache e arquivos temporários são removidos com `Remove-Item -Recurse -Force ...` (Windows) ou `rm -rf ...` (Linux).
+- Se notar qualquer problema de busca, reinicie o backend e limpe o cache do navegador (Ctrl+Shift+R).
+
+---
+
 ## 🗺️ Roadmap
 
 ### ✅ Implementado (v1.2)

@@ -32,9 +32,12 @@ from .models import (
     BuscarResponse,
     PerguntarRequest,
     RAGResponseModel,
+    BuscaPreviaResponse,
     AdicionarArtigoRequest,
     AdicionarArtigoResponse,
-    StatusResponse
+    StatusResponse,
+    User,
+    KnowledgeBase
 )
 
 # Lifecycle management
@@ -71,6 +74,54 @@ app.add_middleware(
 static_path = Path(__file__).parent.parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+# --- MULTIUSUÁRIO: ENDPOINTS ---
+import mysql.connector
+
+def get_mysql_conn():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="root",
+        database="customkb"
+    )
+
+def get_or_create_user(email: str):
+    conn = get_mysql_conn()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.execute("INSERT INTO users (email, criado_em) VALUES (%s, NOW())", (email,))
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
+        user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return user
+
+@app.post("/login", response_model=User)
+async def login(email: str):
+    """Login por email. Cria usuário se não existir."""
+    user = get_or_create_user(email)
+    return User(**user)
+
+@app.post("/criar_base", response_model=KnowledgeBase)
+async def criar_base(email: str, nome: str):
+    """Cria uma base de conhecimento para o usuário (coleção Qdrant exclusiva)."""
+    user = get_or_create_user(email)
+    conn = get_mysql_conn()
+    cursor = conn.cursor(dictionary=True)
+    # Nome da coleção Qdrant: base_<usuario_id>_<nome>
+    qdrant_collection = f"base_{user['id']}_{nome}"
+    cursor.execute("INSERT INTO knowledge_bases (nome, usuario_id, qdrant_collection, criado_em) VALUES (%s, %s, %s, NOW())", (nome, user['id'], qdrant_collection))
+    conn.commit()
+    cursor.execute("SELECT * FROM knowledge_bases WHERE usuario_id=%s AND nome=%s", (user['id'], nome))
+    base = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    # TODO: criar coleção no Qdrant
+    return KnowledgeBase(**base)
 
 
 @app.get("/")
@@ -150,38 +201,67 @@ async def listar_artigos():
 async def buscar_artigos(request: BuscarRequest):
     """Busca semântica em artigos da Wikipedia com validação de relevância"""
     try:
+        import time
         start_time = time.time()
         
+        telemetria = {
+            "tempo_busca_qdrant_ms": 0,
+            "tempo_filtragem_ms": 0,
+            "tempo_total_ms": 0,
+            "query_length": len(request.query),
+            "limite_solicitado": request.limit,
+            "resultados_antes_filtro": 0,
+            "resultados_depois_filtro": 0
+        }
+        
+        # Fase 1: Busca no Qdrant
+        inicio_busca = time.time()
         resultados = wikipedia_offline_service.buscar_artigos(
             query=request.query,
             limit=request.limit
         )
+        telemetria["tempo_busca_qdrant_ms"] = round((time.time() - inicio_busca) * 1000, 2)
+        telemetria["resultados_antes_filtro"] = len(resultados) if resultados else 0
         
-        # Aplicar validação de termos similar ao sistema RAG
+        # Fase 2: Filtragem de resultados
+        inicio_filtragem = time.time()
+        
+        # Aplicar validação de termos similar ao sistema RAG, agora usando normalização
         if resultados:
+            import unicodedata
+            def normalizar_texto(texto):
+                texto_nfd = unicodedata.normalize('NFD', texto)
+                texto_sem_acento = ''.join(c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+                return texto_sem_acento.lower()
+
             stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
             termos_query = [t.lower().strip('?.,!()') for t in request.query.split() if t.lower() not in stopwords and len(t) > 2]
-            
-            if termos_query:
+            termos_query_normalizados = [normalizar_texto(t) for t in termos_query]
+
+            if termos_query_normalizados:
                 resultados_filtrados = []
                 for r in resultados:
-                    titulo_lower = r.title.lower()
-                    conteudo_lower = r.content.lower()
-                    
-                    # Verificar se algum termo da query aparece no título ou conteúdo
-                    tem_termo = any(termo in titulo_lower or termo in conteudo_lower for termo in termos_query)
-                    
-                    # Verificação reversa: título aparece na query
-                    titulo_palavras = [p for p in titulo_lower.split() if len(p) > 2]
-                    titulo_na_query = any(palavra in request.query.lower() for palavra in titulo_palavras)
-                    
+                    titulo_norm = normalizar_texto(r.title)
+                    conteudo_norm = normalizar_texto(r.content)
+
+                    # Verificar se algum termo normalizado da query aparece no título ou conteúdo normalizado
+                    tem_termo = any(termo in titulo_norm or termo in conteudo_norm for termo in termos_query_normalizados)
+
+                    # Verificação reversa: título normalizado aparece na query normalizada
+                    titulo_palavras = [normalizar_texto(p) for p in r.title.split() if len(p) > 2]
+                    query_norm = normalizar_texto(request.query)
+                    titulo_na_query = any(palavra in query_norm for palavra in titulo_palavras)
+
                     if tem_termo or titulo_na_query:
                         resultados_filtrados.append(r)
-                
                 resultados = resultados_filtrados
+        
+        telemetria["tempo_filtragem_ms"] = round((time.time() - inicio_filtragem) * 1000, 2)
+        telemetria["resultados_depois_filtro"] = len(resultados) if resultados else 0
         
         end_time = time.time()
         tempo_busca_ms = (end_time - start_time) * 1000
+        telemetria["tempo_total_ms"] = round(tempo_busca_ms, 2)
         
         # Converter para modelos Pydantic
         resultados_modelo = [
@@ -198,13 +278,56 @@ async def buscar_artigos(request: BuscarRequest):
             query=request.query,
             total_resultados=len(resultados_modelo),
             resultados=resultados_modelo,
-            tempo_busca_ms=tempo_busca_ms
+            tempo_busca_ms=tempo_busca_ms,
+            telemetria=telemetria
         )
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro na busca: {str(e)}"
+        )
+
+
+@app.post("/buscar_previa", response_model=BuscaPreviaResponse)
+async def buscar_previa(request: PerguntarRequest):
+    """Executa apenas a busca semântica e retorna os resultados encontrados"""
+    try:
+        start_time = time.time()
+        
+        # Executar busca (agora retorna telemetria também)
+        documentos, total_chunks, total_artigos, encontrou, telemetria_busca = wikipedia_offline_service.buscar_para_rag(
+            pergunta=request.pergunta,
+            max_chunks=request.max_chunks
+        )
+        
+        search_time = (time.time() - start_time) * 1000
+        
+        # Converter fontes para modelos Pydantic
+        fontes_modelo = [
+            WikipediaResultModel(
+                title=doc.title,
+                content=doc.content,
+                url=doc.url,
+                score=doc.score
+            )
+            for doc in documentos
+        ]
+        
+        return BuscaPreviaResponse(
+            pergunta=request.pergunta,
+            encontrou_resultados=encontrou,
+            total_chunks=total_chunks,
+            total_artigos=total_artigos,
+            fontes=fontes_modelo,
+            tempo_busca_ms=search_time,
+            telemetria=telemetria_busca
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao buscar: {str(e)}"
         )
 
 
@@ -238,7 +361,10 @@ async def perguntar_com_rag(request: PerguntarRequest):
             resposta=resposta_rag.answer,
             fontes=fontes_modelo,
             raciocinio=resposta_rag.reasoning,
-            tempo_processamento_ms=tempo_processamento_ms
+            tempo_processamento_ms=tempo_processamento_ms,
+            total_chunks=resposta_rag.total_chunks,
+            total_artigos=resposta_rag.total_artigos,
+            telemetria=resposta_rag.telemetria
         )
         
     except Exception as e:

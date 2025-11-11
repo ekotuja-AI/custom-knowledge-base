@@ -106,13 +106,15 @@
             color: #667eea;
             border-radius: 20px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s, transform 0.2s;
             font-size: 0.9em;
         }
 
         .filter-btn:hover {
             background: #667eea;
             color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
         }
 
         .filter-btn.active {
@@ -363,15 +365,15 @@
         <div class="stats">
             <div class="stat-card">
                 <span class="stat-value" id="totalArtigos">-</span>
-                <span class="stat-label">Artigos</span>
+                <span class="stat-label">📚 Total de Artigos</span>
             </div>
             <div class="stat-card">
                 <span class="stat-value" id="totalChunks">-</span>
-                <span class="stat-label">Chunks</span>
+                <span class="stat-label">📦 Total de Chunks</span>
             </div>
             <div class="stat-card">
                 <span class="stat-value" id="artigosFiltrados">-</span>
-                <span class="stat-label">Exibindo</span>
+                <span class="stat-label" id="labelFiltrados">🔍 Filtrando</span>
             </div>
         </div>
 
@@ -384,6 +386,7 @@
                 oninput="filtrarArtigos()"
             >
             <div class="filters">
+                <button class="filter-btn" onclick="mostrarTodos(event)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600;">📚 Ver Todos</button>
                 <button class="filter-btn active" onclick="ordenar('alfabetica', event)">A-Z</button>
                 <button class="filter-btn" onclick="ordenar('chunks', event)">Mais Chunks</button>
                 <button class="filter-btn" onclick="ordenar('recentes', event)">Mais Recentes</button>
@@ -510,11 +513,12 @@
             const busca = document.getElementById('searchInput').value.toLowerCase();
             
             if (!busca.trim()) {
-                // Se busca vazia, não mostrar artigos
+                // Se busca vazia, limpar filtros e voltar ao estado inicial
                 artigosFiltrados = [];
-                document.getElementById('articlesContainer').innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"><p style="font-size: 1.3em; color: #667eea; font-weight: 600;">🔍 Use a busca acima para encontrar artigos</p><p style="color: #999; margin-top: 10px;">Digite palavras-chave para filtrar os artigos da base</p></div>';
+                document.getElementById('articlesContainer').innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"><p style="font-size: 1.3em; color: #667eea; font-weight: 600;">🔍 Use a busca acima ou clique em "📚 Ver Todos"</p><p style="color: #999; margin-top: 10px;">Digite palavras-chave para filtrar os artigos da base</p></div>';
                 document.getElementById('articlesContainer').style.display = 'block';
                 document.getElementById('artigosFiltrados').textContent = 0;
+                document.getElementById('labelFiltrados').textContent = '🔍 Filtrando';
                 document.getElementById('pagination').style.display = 'none';
                 return;
             } else {
@@ -550,6 +554,37 @@
                 prevBtn.disabled = paginaAtual === 1;
                 nextBtn.disabled = paginaAtual === totalPaginas;
                 paginacaoTexto.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+            }
+        }
+
+        function mostrarTodos(event) {
+            // Limpar busca
+            document.getElementById('searchInput').value = '';
+            
+            // Mostrar todos os artigos
+            artigosFiltrados = [...todosArtigos];
+            
+            // Aplicar ordenação atual
+            ordenar(ordenacaoAtual, null);
+            
+            // Atualizar UI
+            document.getElementById('artigosFiltrados').textContent = artigosFiltrados.length;
+            document.getElementById('labelFiltrados').textContent = '✅ Mostrando';
+            
+            // Resetar para primeira página
+            paginaAtual = 1;
+            renderizarArtigos();
+            
+            // Destacar botão "Ver Todos"
+            if (event) {
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    if (btn.textContent.includes('Ver Todos')) {
+                        btn.style.transform = 'scale(1.05)';
+                        setTimeout(() => {
+                            btn.style.transform = 'scale(1)';
+                        }, 200);
+                    }
+                });
             }
         }
 
@@ -591,6 +626,7 @@
             loading.style.display = 'none';
             
             document.getElementById('artigosFiltrados').textContent = artigosFiltrados.length;
+            document.getElementById('labelFiltrados').textContent = artigosFiltrados.length > 0 ? '✅ Encontrados' : '🔍 Filtrando';
             
             if (artigosFiltrados.length === 0) {
                 container.style.display = 'none';

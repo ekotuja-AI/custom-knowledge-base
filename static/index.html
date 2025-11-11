@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Wikipedia Offline RAG - Interface Web</title>
+    <!-- Version: 2.0 - Telemetria de Busca Semântica -->
     <style>
         * {
             margin: 0;
@@ -239,6 +243,32 @@
             background: linear-gradient(90deg, #f093fb 0%, #f5576c 100%);
         }
 
+        /* Timer em tempo real */
+        #timerDisplay {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1.4em;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            }
+        }
+
         .answer {
             background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
             padding: 20px;
@@ -326,13 +356,68 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="mainContainer">
         <div class="header">
             <h1>🧠 Wikipedia Offline RAG</h1>
             <p>Sistema de busca semântica e perguntas com IA - 100% Offline</p>
+            <div id="userInfo" style="margin-top:18px;font-size:1.1em;color:#fff;background:#667eea33;padding:8px 18px;border-radius:8px;display:none;">
+                <span id="userEmailDisplay"></span>
+                <span style="margin-left:18px;">Base:&nbsp;</span>
+                <select id="baseSelect" style="padding:4px 12px;border-radius:6px;font-size:1em;">
+                </select>
+                    <!-- Botões de multiusuário removidos -->
+                    <!-- Botões de multiusuário removidos -->
+            </div>
+    <script>
+    async function loadStats() {
+        try {
+            // Buscar estatísticas reais de chunks
+            const statsResp = await fetch('/estatisticas');
+            const stats = await statsResp.json();
+            document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
+
+            // Buscar status geral
+            const statusResp = await fetch('/status');
+            const status = await statusResp.json();
+            document.getElementById('qdrantStatus').textContent = status.qdrant_conectado ? 'Conectado' : 'Desconectado';
+            document.getElementById('embeddingStatus').textContent = status.modelo_embedding_carregado ? 'Carregado' : 'Indisponível';
+            document.getElementById('ollamaStatus').textContent = status.ollama_disponivel ? 'Disponível' : 'Indisponível';
+        } catch (error) {
+            document.getElementById('totalChunks').textContent = 'Erro';
+            document.getElementById('qdrantStatus').textContent = 'Erro';
+            document.getElementById('embeddingStatus').textContent = 'Erro';
+            document.getElementById('ollamaStatus').textContent = 'Erro';
+        }
+    }
+    window.loadStats = loadStats;
+    window.addEventListener('DOMContentLoaded', loadStats);
+    </script>
+
+        <!-- Modal para criar base -->
+        <div id="createBaseModal" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:9999;">
+            <div style="background:white;padding:32px 24px;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:350px;width:100%;text-align:center;">
+                <h2 style="color:#667eea;margin-bottom:14px;">Nova Base</h2>
+                <input type="text" id="newBaseName" placeholder="Nome da base" style="width:100%;padding:12px;border-radius:8px;border:2px solid #e0e0e0;font-size:16px;margin-bottom:18px;">
+                <button onclick="createBase()" style="width:100%;padding:12px 0;font-size:16px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;cursor:pointer;">Criar</button>
+                <button onclick="closeCreateBaseModal()" style="width:100%;margin-top:10px;padding:10px 0;font-size:15px;background:#eee;color:#333;border:none;border-radius:8px;cursor:pointer;">Cancelar</button>
+                <div id="createBaseError" style="color:#c00;margin-top:10px;display:none;"></div>
+            </div>
+        </div>
+            <!-- Modal de criação de base removido -->
         </div>
 
         <div class="stats" id="stats">
+        <div class="timing-breakdown" id="telemetryPanel" style="display:none;">
+            <div class="timing-breakdown-title">⏱️ Telemetria de Busca e Geração</div>
+            <div class="timing-bar">
+                <div class="timing-bar-label">Busca: <span id="searchTime">-</span> ms</div>
+                <div class="timing-bar-container"><div class="timing-bar-fill search" id="searchBar" style="width:0%"></div></div>
+            </div>
+            <div class="timing-bar">
+                <div class="timing-bar-label">Geração: <span id="generationTime">-</span> ms</div>
+                <div class="timing-bar-container"><div class="timing-bar-fill generation" id="generationBar" style="width:0%"></div></div>
+            </div>
+        </div>
             <div class="stat-card">
                 <div class="stat-value" id="totalChunks">...</div>
                 <div class="stat-label">Chunks na Base</div>
@@ -413,363 +498,157 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:9000';
-
-        // Carregar estatísticas ao iniciar
-        window.addEventListener('load', loadStats);
-
-        async function loadStats() {
-            try {
-                const response = await fetch(`${API_BASE}/status`);
-                const data = await response.json();
-                
-                document.getElementById('qdrantStatus').textContent = data.qdrant_conectado ? '✅ OK' : '❌ OFF';
-                document.getElementById('embeddingStatus').textContent = data.modelo_embedding_carregado ? '✅ OK' : '❌ OFF';
-                
-                // Verificar Ollama
-                try {
-                    const ollamaResp = await fetch('http://localhost:11434/api/version');
-                    document.getElementById('ollamaStatus').textContent = ollamaResp.ok ? '✅ OK' : '❌ OFF';
-                } catch {
-                    document.getElementById('ollamaStatus').textContent = '❌ OFF';
-                }
-
-                // Buscar total de chunks
-                try {
-                    const qdrantResp = await fetch('http://localhost:6333/collections/wikipedia_langchain');
-                    const qdrantData = await qdrantResp.json();
-                    document.getElementById('totalChunks').textContent = qdrantData.result.points_count.toLocaleString();
-                } catch {
-                    document.getElementById('totalChunks').textContent = 'N/A';
-                }
-            } catch (error) {
-                console.error('Erro ao carregar estatísticas:', error);
-            }
-        }
-
-        async function askQuestion() {
-            const question = document.getElementById('question').value;
-            const maxChunks = document.getElementById('maxChunks').value;
-            const resultsDiv = document.getElementById('answerResults');
-
-            if (!question.trim()) {
-                resultsDiv.innerHTML = '<div class="error">Por favor, digite uma pergunta.</div>';
-                return;
-            }
-
-            // Loading indicator melhorado com etapas
-            resultsDiv.innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <div style="margin-top: 15px;">
-                        <div class="loading-stage">🔍 Buscando documentos relevantes...</div>
-                        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                            ⏱️ A geração da resposta pode levar 20-30 segundos
-                        </div>
+    // Funções principais do frontend
+    async function performSearch() {
+        const query = document.getElementById('searchQuery').value;
+        const limit = parseInt(document.getElementById('searchLimit').value) || 5;
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '<div class="loading">Buscando...</div>';
+        const t0 = performance.now();
+        try {
+            const response = await fetch('/buscar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, limite: limit })
+            });
+            const t1 = performance.now();
+            const data = await response.json();
+            const searchTime = Math.round(t1 - t0);
+            document.getElementById('telemetryPanel').style.display = 'block';
+            document.getElementById('searchTime').textContent = searchTime;
+            document.getElementById('searchBar').style.width = Math.min(searchTime/10,100) + '%';
+            document.getElementById('generationTime').textContent = '-';
+            document.getElementById('generationBar').style.width = '0%';
+            let html = '';
+            if (data.resultados && data.resultados.length > 0) {
+                // Agrupar chunks por título
+                const agrupados = {};
+                data.resultados.forEach(r => {
+                    if (!agrupados[r.title]) agrupados[r.title] = [];
+                    agrupados[r.title].push(r);
+                });
+                html += Object.entries(agrupados).map(([titulo, chunks]) => `
+                    <div class="result-item">
+                        <div class="result-title">${titulo}</div>
+                        ${chunks.map(chunk => `
+                            <div class="result-content">${chunk.content}</div>
+                            <div class="result-meta">Score: ${chunk.score}</div>
+                        `).join('')}
                     </div>
-                </div>
-            `;
-
-            const startTime = Date.now();
-
-            try {
-                // Simular mudança de etapa após 2 segundos
-                setTimeout(() => {
-                    const currentLoading = document.querySelector('.loading-stage');
-                    if (currentLoading) {
-                        currentLoading.innerHTML = '🤖 Gerando resposta com IA...';
-                    }
-                }, 2000);
-
-                const response = await fetch(`${API_BASE}/perguntar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pergunta: question, max_chunks: parseInt(maxChunks) })
-                });
-
-                const data = await response.json();
-                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-
-                // Extrair tempos detalhados do backend (se disponível)
-                const timing = data.model_info?.timing || {};
-                const searchTime = timing.search_time || 0;
-                const generationTime = timing.generation_time || 0;
-                const backendTotal = timing.total_time || 0;
-
-                let html = `
-                    <div class="answer">
-                        <div class="answer-text">${data.resposta}</div>
-                        <div class="result-meta">
-                            <span>⏱️ Total: ${totalTime}s</span>
-                            ${searchTime > 0 ? `<span>🔍 Busca: ${searchTime}s</span>` : ''}
-                            ${generationTime > 0 ? `<span>🤖 IA: ${generationTime}s</span>` : ''}
-                            <span>📚 ${data.fontes ? data.fontes.length : 0} fontes</span>
-                        </div>
-                `;
-
-                // Adicionar breakdown visual dos tempos se disponível
-                if (searchTime > 0 || generationTime > 0) {
-                    const maxTime = Math.max(searchTime, generationTime);
-                    const searchPercent = (searchTime / maxTime) * 100;
-                    const generationPercent = (generationTime / maxTime) * 100;
-
-                    html += `
-                        <div class="timing-breakdown">
-                            <div class="timing-breakdown-title">⏱️ Breakdown de Tempo</div>
-                            
-                            <div class="timing-bar">
-                                <div class="timing-bar-label">
-                                    <span>🔍 Busca de Documentos</span>
-                                    <span><strong>${searchTime}s</strong></span>
-                                </div>
-                                <div class="timing-bar-container">
-                                    <div class="timing-bar-fill search" style="width: ${searchPercent}%"></div>
-                                </div>
-                            </div>
-
-                            <div class="timing-bar">
-                                <div class="timing-bar-label">
-                                    <span>🤖 Geração com IA (${data.model_info?.model || 'LLM'})</span>
-                                    <span><strong>${generationTime}s</strong></span>
-                                </div>
-                                <div class="timing-bar-container">
-                                    <div class="timing-bar-fill generation" style="width: ${generationPercent}%"></div>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 0.9em; color: #666;">
-                                <strong>Total de Processamento:</strong> ${backendTotal}s
-                                ${parseFloat(totalTime) > backendTotal + 0.5 ? ` | <span style="color: #999;">Overhead de rede: ${(parseFloat(totalTime) - backendTotal).toFixed(1)}s</span>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                html += `</div>`;
-
-
-                if (data.fontes && data.fontes.length > 0) {
-                    // Agrupar fontes por título
-                    const fontesAgrupadas = {};
-                    data.fontes.forEach(fonte => {
-                        if (!fontesAgrupadas[fonte.title]) {
-                            fontesAgrupadas[fonte.title] = {
-                                title: fonte.title,
-                                url: fonte.url,
-                                chunks: [],
-                                maxScore: fonte.score
-                            };
-                        }
-                        fontesAgrupadas[fonte.title].chunks.push({
-                            content: fonte.content,
-                            score: fonte.score
-                        });
-                        if (fonte.score > fontesAgrupadas[fonte.title].maxScore) {
-                            fontesAgrupadas[fonte.title].maxScore = fonte.score;
-                        }
-                    });
-
-                    html += '<div class="sources"><div class="sources-title">📖 Fontes:</div>';
-                    
-                    Object.values(fontesAgrupadas).forEach((grupo, idx) => {
-                        const numChunks = grupo.chunks.length;
-                        const avgScore = (grupo.chunks.reduce((sum, c) => sum + c.score, 0) / numChunks).toFixed(3);
-                        
-                        // Pegar o conteúdo do chunk com maior score
-                        const melhorChunk = grupo.chunks.reduce((prev, current) => 
-                            (prev.score > current.score) ? prev : current
-                        );
-                        
-                        html += `
-                            <div class="result-item">
-                                <div class="result-title">
-                                    ${idx + 1}. ${grupo.title}
-                                    ${numChunks > 1 ? `<span style="color: #667eea; font-size: 0.9em; margin-left: 10px;">(${numChunks} chunks)</span>` : ''}
-                                </div>
-                                <div class="result-content">${melhorChunk.content.substring(0, 200)}...</div>
-                                <div class="result-meta">
-                                    <span>Score médio: ${avgScore}</span>
-                                    ${numChunks > 1 ? `<span>Max: ${grupo.maxScore.toFixed(3)}</span>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                }
-
-                resultsDiv.innerHTML = html;
-            } catch (error) {
-                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+                `).join('');
+            } else {
+                html += '<div class="error">Nenhum resultado encontrado.</div>';
             }
+            // Telemetria detalhada
+            if (data.telemetria) {
+                html += `<div class="timing-breakdown" style="margin-top:18px;">
+                    <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
+                    <div>Tempo total: <b>${data.telemetria.tempo_total_ms} ms</b></div>
+                    <div>Tempo busca Qdrant: <b>${data.telemetria.tempo_busca_qdrant_ms} ms</b></div>
+                    <div>Tempo filtragem: <b>${data.telemetria.tempo_filtragem_ms} ms</b></div>
+                    <div>Resultados antes do filtro: <b>${data.telemetria.resultados_antes_filtro}</b></div>
+                    <div>Resultados após filtro: <b>${data.telemetria.resultados_depois_filtro}</b></div>
+                </div>`;
+            }
+            resultsDiv.innerHTML = html;
+        } catch (error) {
+            resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
         }
+    }
 
-        async function performSearch() {
-            const query = document.getElementById('searchQuery').value;
-            const limit = document.getElementById('searchLimit').value;
-            const resultsDiv = document.getElementById('searchResults');
-
-            if (!query.trim()) {
-                resultsDiv.innerHTML = '<div class="error">Por favor, digite um termo de busca.</div>';
-                return;
+    async function askQuestion() {
+        const question = document.getElementById('question').value;
+        const maxChunks = parseInt(document.getElementById('maxChunks').value) || 10;
+        const resultsDiv = document.getElementById('answerResults');
+        resultsDiv.innerHTML = '<div class="loading">Processando pergunta...</div>';
+        const t0 = performance.now();
+        try {
+            const response = await fetch('/perguntar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pergunta: question, max_chunks: maxChunks })
+            });
+            const t1 = performance.now();
+            const data = await response.json();
+            const generationTime = Math.round(t1 - t0);
+            document.getElementById('telemetryPanel').style.display = 'block';
+            document.getElementById('generationTime').textContent = generationTime;
+            document.getElementById('generationBar').style.width = Math.min(generationTime/10,100) + '%';
+            document.getElementById('searchTime').textContent = '-';
+            document.getElementById('searchBar').style.width = '0%';
+            let html = '';
+            if (data.resposta) {
+                html += `<div class="answer"><div class="answer-text">${data.resposta}</div></div>`;
+            } else {
+                html += '<div class="error">Nenhuma resposta encontrada.</div>';
             }
-
-            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando...</div>';
-
-            try {
-                const response = await fetch(`${API_BASE}/buscar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, limit: parseInt(limit) })
-                });
-
-                const data = await response.json();
-
-                if (!data.resultados || data.resultados.length === 0) {
-                    resultsDiv.innerHTML = '<div class="error">Nenhum resultado encontrado.</div>';
-                    return;
-                }
-
-                // Agrupar resultados por título
-                const resultadosAgrupados = {};
-                data.resultados.forEach(result => {
-                    if (!resultadosAgrupados[result.title]) {
-                        resultadosAgrupados[result.title] = {
-                            title: result.title,
-                            url: result.url,
-                            chunks: [],
-                            maxScore: result.score
-                        };
-                    }
-                    resultadosAgrupados[result.title].chunks.push({
-                        content: result.content,
-                        score: result.score
-                    });
-                    if (result.score > resultadosAgrupados[result.title].maxScore) {
-                        resultadosAgrupados[result.title].maxScore = result.score;
-                    }
-                });
-
-                let html = '<div class="results">';
-                Object.values(resultadosAgrupados).forEach((grupo, idx) => {
-                    const numChunks = grupo.chunks.length;
-                    const avgScore = (grupo.chunks.reduce((sum, c) => sum + c.score, 0) / numChunks).toFixed(3);
-                    
-                    // Pegar o conteúdo do chunk com maior score
-                    const melhorChunk = grupo.chunks.reduce((prev, current) => 
-                        (prev.score > current.score) ? prev : current
-                    );
-                    
-                    html += `
-                        <div class="result-item">
-                            <div class="result-title">
-                                ${idx + 1}. ${grupo.title}
-                                ${numChunks > 1 ? `<span style="color: #667eea; font-size: 0.9em; margin-left: 10px;">(${numChunks} chunks)</span>` : ''}
-                            </div>
-                            <div class="result-content">${melhorChunk.content.substring(0, 300)}...</div>
-                            <div class="result-meta">
-                                <span>Score médio: ${avgScore}</span>
-                                ${numChunks > 1 ? `<span>Max: ${grupo.maxScore.toFixed(3)}</span>` : ''}
-                                ${grupo.url ? `<a href="${grupo.url}" target="_blank">🔗 Ver artigo</a>` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-
-                resultsDiv.innerHTML = html;
-            } catch (error) {
-                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            // Telemetria detalhada (se disponível)
+            if (data.telemetria) {
+                html += `<div class="timing-breakdown" style="margin-top:18px;">
+                    <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
+                    <div>Tempo total: <b>${data.telemetria.tempo_total_ms} ms</b></div>
+                    <div>Tempo busca Qdrant: <b>${data.telemetria.tempo_busca_qdrant_ms} ms</b></div>
+                    <div>Tempo filtragem: <b>${data.telemetria.tempo_filtragem_ms} ms</b></div>
+                    <div>Resultados antes do filtro: <b>${data.telemetria.resultados_antes_filtro}</b></div>
+                    <div>Resultados após filtro: <b>${data.telemetria.resultados_depois_filtro}</b></div>
+                </div>`;
             }
+            resultsDiv.innerHTML = html;
+        } catch (error) {
+            resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
         }
+    }
 
-        async function addArticle() {
-            const title = document.getElementById('articleTitle').value;
-            const resultsDiv = document.getElementById('addResults');
-
-            if (!title.trim()) {
-                resultsDiv.innerHTML = '<div class="error">Por favor, digite o título do artigo.</div>';
-                return;
+    async function addArticle() {
+        const title = document.getElementById('articleTitle').value;
+        const resultsDiv = document.getElementById('addResults');
+        resultsDiv.innerHTML = '<div class="loading">Adicionando artigo...</div>';
+        try {
+            const response = await fetch('/adicionar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ titulo: title })
+            });
+            const data = await response.json();
+            if (data.chunks_adicionados) {
+                resultsDiv.innerHTML = `<div class="success">Chunks criados: ${data.chunks_adicionados}<br><a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a></div>`;
+                loadStats();
+            } else {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
             }
-
-            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Adicionando artigo...</div>';
-
-            try {
-                const response = await fetch(`${API_BASE}/adicionar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ titulo: title })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.chunks_adicionados > 0) {
-                    resultsDiv.innerHTML = `
-                        <div class="success">
-                            ✅ ${data.message}<br>
-                            <strong>${data.titulo}</strong><br>
-                            Chunks criados: ${data.chunks_adicionados}<br>
-                            <a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a>
-                        </div>
-                    `;
-                    loadStats(); // Atualizar estatísticas
-                    document.getElementById('articleTitle').value = ''; // Limpar input
-                } else {
-                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
-                }
-            } catch (error) {
-                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
-            }
+        } catch (error) {
+            resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
         }
+    }
 
-        async function addRandomArticle() {
-            const resultsDiv = document.getElementById('addResults');
-            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Buscando artigo aleatório da Wikipedia...</div>';
-
-            try {
-                // Pegar artigo aleatório da Wikipedia em português
-                const randomResponse = await fetch('https://pt.wikipedia.org/api/rest_v1/page/random/summary');
-                const randomData = await randomResponse.json();
-                const randomTitle = randomData.title;
-
-                document.getElementById('articleTitle').value = randomTitle;
-                resultsDiv.innerHTML = `<div class="loading"><div class="spinner"></div>Adicionando "${randomTitle}"...</div>`;
-
-                // Adicionar o artigo
-                const response = await fetch(`${API_BASE}/adicionar`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ titulo: randomTitle })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.chunks_adicionados > 0) {
-                    resultsDiv.innerHTML = `
-                        <div class="success">
-                            🎲 Artigo aleatório adicionado!<br>
-                            <strong>${data.titulo}</strong><br>
-                            Chunks criados: ${data.chunks_adicionados}<br>
-                            <small>${randomData.description || ''}</small><br>
-                            <a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a>
-                        </div>
-                    `;
-                    loadStats();
-                } else {
-                    resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
-                }
-            } catch (error) {
-                resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+    async function addRandomArticle() {
+        const resultsDiv = document.getElementById('addResults');
+        resultsDiv.innerHTML = '<div class="loading">Adicionando artigo aleatório...</div>';
+        try {
+            const response = await fetch('/ingest/exemplos', { method: 'POST' });
+            const data = await response.json();
+            if (data.total_chunks) {
+                resultsDiv.innerHTML = `<div class="success">Artigos adicionados: ${data.total_artigos}<br>Chunks criados: ${data.total_chunks}</div>`;
+                loadStats();
+            } else {
+                resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigos'}</div>`;
             }
+        } catch (error) {
+            resultsDiv.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
         }
+    }
 
-        // Permitir Enter para buscar/perguntar
-        document.getElementById('searchQuery').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') performSearch();
-        });
+    document.getElementById('searchQuery').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+    document.getElementById('question').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey) askQuestion();
+    });
 
-        document.getElementById('question').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && e.ctrlKey) askQuestion();
-        });
+    window.askQuestion = askQuestion;
+    window.performSearch = performSearch;
+    window.addArticle = addArticle;
+    window.addRandomArticle = addRandomArticle;
     </script>
 </body>
 </html>
