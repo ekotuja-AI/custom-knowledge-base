@@ -290,7 +290,8 @@ custom-knowledge-base/
 ├── services/                     # 🔧 Lógica de negócio
 │   ├── langchainWikipediaService.py  # Service principal (RAG + LangChain)
 │   ├── offlineWikipediaService.py    # Service legado
-│   └── wikipedia_utils.py            # Utilitários Wikipedia
+│   └── utils/                       # Pacote de utilitários
+│       └── wikipedia_utils.py        # Utilitários Wikipedia
 ├── static/                       # 🎨 Frontend
 │   ├── index.html               # Página principal
 │   └── artigos.html             # Navegador de artigos
@@ -467,57 +468,3 @@ docker exec ollama_server ollama list
 - [ ] Exportação de conhecimento
 
 ---
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Por favor:
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/MinhaFeature`)
-3. Commit suas mudanças (`git commit -m 'Adiciona MinhaFeature'`)
-4. Push para a branch (`git push origin feature/MinhaFeature`)
-5. Abra um Pull Request
-
-### Diretrizes
-- Mantenha a cobertura de testes acima de 80%
-- Siga PEP 8 para código Python
-- Documente novas funcionalidades no README
-- Adicione testes para novas features
-
----
-
-## 📄 Licença
-
-Este projeto é open-source sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
----
-
-## 🙏 Agradecimentos
-
-Este projeto utiliza tecnologias incríveis:
-
-- **[FastAPI](https://fastapi.tiangolo.com/)** - Framework web moderno e rápido
-- **[LangChain](https://langchain.com/)** - Framework para aplicações com LLMs
-- **[Qdrant](https://qdrant.tech/)** - Vector database de alta performance
-- **[Ollama](https://ollama.ai/)** - Execução local de LLMs
-- **[Sentence Transformers](https://www.sbert.net/)** - Embeddings multilíngues
-- **[Docker](https://www.docker.com/)** - Containerização
-- **[Wikipedia](https://www.wikipedia.org/)** - Fonte de conhecimento
-
----
-
-## 📧 Contato
-
-**Projeto**: [custom-knowledge-base](https://github.com/ekotuja-AI/custom-knowledge-base)  
-**Issues**: [GitHub Issues](https://github.com/ekotuja-AI/custom-knowledge-base/issues)  
-**Autor**: [@ekotuja-AI](https://github.com/ekotuja-AI)
-
----
-
-<div align="center">
-
-**⭐ Se este projeto foi útil, considere dar uma estrela no GitHub! ⭐**
-
-Made with ❤️ and 🤖 by [ekotuja-AI](https://github.com/ekotuja-AI)
-
-</div>

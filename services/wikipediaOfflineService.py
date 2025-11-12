@@ -17,7 +17,7 @@ import json
 from .langchainWikipediaService import langchain_wikipedia_service, WikipediaDocument
 
 # Utilitários
-from .wikipedia_utils import (
+from .utils.wikipedia_utils import (
     WikipediaAPIClient,
     TextProcessor,
     QdrantHelper,

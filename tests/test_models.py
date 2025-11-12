@@ -128,9 +128,8 @@ class TestRequestModels:
     def test_perguntar_request_minimo(self):
         """Testa PerguntarRequest com campos mínimos"""
         request = PerguntarRequest(pergunta="O que é Python?")
-        
         assert request.pergunta == "O que é Python?"
-        assert request.max_chunks == 5  # valor padrão
+        assert request.max_chunks == 30  # valor padrão atualizado
     
     def test_perguntar_request_com_max_chunks(self):
         """Testa PerguntarRequest com max_chunks customizado"""

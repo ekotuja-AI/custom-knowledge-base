@@ -62,8 +62,7 @@ class TestServiceInitialization:
     def test_wikipedia_offline_service_init(self):
         """Testa inicialização do WikipediaOfflineService"""
         service = WikipediaOfflineService()
-        
-        assert service.collection_name == "wikipedia_offline"
+        assert service.collection_name == "wikipedia_langchain"
         assert service.ollama_host == "ollama"
         assert service.ollama_port == 11434
         assert service.model_name == "qwen2.5:7b"
