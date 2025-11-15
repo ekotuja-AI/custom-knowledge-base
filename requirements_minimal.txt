@@ -1,3 +1,5 @@
+# Para detecção semântica de perguntas meta
+sentence-transformers
 # Dependências para integração MySQL
 mysql-connector-python
 # FastAPI e servidor web

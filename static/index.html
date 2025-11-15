@@ -7,6 +7,54 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Wikipedia Offline RAG - Interface Web</title>
+    <script>
+    let ws;
+    function iniciarWebSocketProgresso() {
+        console.log("iniciarWebSocketProgresso")
+        const progressoDiv = document.getElementById('progressoPergunta');
+        progressoDiv.innerHTML = '';
+        ws = new WebSocket('ws://' + window.location.host + '/ws/progresso-pergunta');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.status === 'finalizado') {
+                progressoDiv.innerHTML += '<div><b>Processamento finalizado!</b></div>';
+                ws.close();
+            } else {
+                progressoDiv.innerHTML += `<div>${data.status}</div>`;
+            }
+        };
+        ws.onerror = function() {
+            progressoDiv.innerHTML += '<div style="color:red">Erro no WebSocket</div>';
+        };
+    }
+
+    function iniciarWebSocketTelemetria() {
+        console.log("iniciarWebSocketTelemetria")
+        const telemetriaDiv = document.getElementById('telemetriaStatus');
+        telemetriaDiv.innerHTML = '';
+        // Fecha o WebSocket anterior se existir
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+        }
+        ws = new WebSocket('ws://' + window.location.host + '/ws/telemetria');
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            console.log('[Telemetria WS]', data.status);
+            // Adiciona incrementalmente sem sobrescrever
+            const div = document.createElement('div');
+            div.textContent = data.status;
+            telemetriaDiv.appendChild(div);
+        };
+        ws.onerror = function() {
+            console.error('[Telemetria WS] Erro no WebSocket');
+            const div = document.createElement('div');
+            div.style.color = 'red';
+            div.textContent = 'Erro no WebSocket';
+            telemetriaDiv.appendChild(div);
+        };
+    // ...existing code...
+    }
+    </script>
     <!-- Version: 2.0 - Telemetria de Busca Semântica -->
     <style>
         * {
@@ -357,6 +405,8 @@
 </head>
 <body>
     <div class="container" id="mainContainer">
+        <div id="progressoPergunta" style="background:#fff; color:#333; padding:10px; margin-bottom:20px; border-radius:8px; min-height:40px;"></div>
+        <button onclick="iniciarWebSocketProgresso()">Mostrar Progresso da Pergunta</button>
         <div class="header">
             <h1>🧠 Wikipedia Offline RAG</h1>
             <p>Sistema de busca semântica e perguntas com IA - 100% Offline</p>
@@ -455,10 +505,12 @@
                     <label for="maxChunks">Número de chunks para contexto:</label>
                     <input type="number" id="maxChunks" value="10" min="1" max="20">
                 </div>
-                <button onclick="askQuestion()">
+                <button onclick="iniciarWebSocketTelemetria(); askQuestion();">
                     Perguntar com IA
                 </button>
                 <div id="answerResults"></div>
+                <div id="telemetriaStatus" style="margin:16px 0; padding:8px; background:#f3f3f3; border-radius:6px; min-height:32px; font-size:1.1em;"></div>
+                <div id="telemetriaDetalhada" style="margin:8px 0; padding:8px; background:#e9e9e9; border-radius:6px; min-height:24px; font-size:1em;"></div>
             </div>
 
             <!-- Painel de Busca -->
@@ -495,6 +547,8 @@
             </div>
             <div id="addResults"></div>
         </div>
+
+        
     </div>
 
     <script>
@@ -560,7 +614,13 @@
         const question = document.getElementById('question').value;
         const maxChunks = parseInt(document.getElementById('maxChunks').value) || 10;
         const resultsDiv = document.getElementById('answerResults');
+        // Limpa o div de resposta antes de processar nova pergunta
+        resultsDiv.innerHTML = '';
         resultsDiv.innerHTML = '<div class="loading">Processando pergunta...</div>';
+        // Limpa o div de telemetria incremental antes de nova pergunta
+        const telemetriaDiv = document.getElementById('telemetriaStatus');
+        if (telemetriaDiv) telemetriaDiv.innerHTML = '';
+        document.getElementById('telemetriaDetalhada').innerHTML = '';
         const t0 = performance.now();
         try {
             const response = await fetch('/perguntar', {
@@ -584,14 +644,16 @@
             }
             // Telemetria detalhada (se disponível)
             if (data.telemetria) {
-                html += `<div class="timing-breakdown" style="margin-top:18px;">
-                    <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
-                    <div>Tempo total: <b>${data.telemetria.tempo_total_ms} ms</b></div>
-                    <div>Tempo busca Qdrant: <b>${data.telemetria.tempo_busca_qdrant_ms} ms</b></div>
-                    <div>Tempo filtragem: <b>${data.telemetria.tempo_filtragem_ms} ms</b></div>
-                    <div>Resultados antes do filtro: <b>${data.telemetria.resultados_antes_filtro}</b></div>
-                    <div>Resultados após filtro: <b>${data.telemetria.resultados_depois_filtro}</b></div>
-                </div>`;
+                document.getElementById('telemetriaDetalhada').innerHTML = `
+                    <div class="timing-breakdown" style="margin-top:8px;">
+                        <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
+                        <div>Tempo total: <b>${data.telemetria.tempo_total_ms} ms</b></div>
+                        <div>Tempo busca Qdrant: <b>${data.telemetria.tempo_busca_qdrant_ms} ms</b></div>
+                        <div>Tempo filtragem: <b>${data.telemetria.tempo_filtragem_ms} ms</b></div>
+                        <div>Resultados antes do filtro: <b>${data.telemetria.resultados_antes_filtro}</b></div>
+                        <div>Resultados após filtro: <b>${data.telemetria.resultados_depois_filtro}</b></div>
+                    </div>
+                `;
             }
             resultsDiv.innerHTML = html;
         } catch (error) {
@@ -611,7 +673,7 @@
             });
             const data = await response.json();
             if (data.chunks_adicionados) {
-                resultsDiv.innerHTML = `<div class="success">Chunks criados: ${data.chunks_adicionados}<br><a href="${data.url}" target="_blank" style="color: #4CAF50;">Ver artigo na Wikipedia</a></div>`;
+                resultsDiv.innerHTML = `<div class="success">Chunks criados: ${data.chunks_adicionados}<br><a href="${data.url}" target="_blank" style="color: #4CAF50;">${data.titulo || 'Ver artigo'}</a></div>`;
                 loadStats();
             } else {
                 resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;

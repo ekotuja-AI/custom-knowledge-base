@@ -4,14 +4,17 @@ Wikipedia Offline Service - Versão com LangChain
 Versão que integra Qdrant + Ollama + dados da Wikipedia com LangChain
 """
 
+
 import os
 import time
 import logging
 import requests
 import uuid
+import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import json
+import asyncio
 
 # LangChain integration
 from .langchainWikipediaService import langchain_wikipedia_service, WikipediaDocument
@@ -24,6 +27,7 @@ from .utils.wikipedia_utils import (
     WikipediaDataValidator,
     MetricsCollector
 )
+from api.telemetria_ws import enviar_telemetria
 
 try:
     from qdrant_client import QdrantClient
@@ -73,6 +77,7 @@ class RAGResponse:
 
 
 class WikipediaOfflineService:
+
     """Serviço Wikipedia offline funcional"""
     
     def __init__(self):
@@ -660,48 +665,19 @@ class WikipediaOfflineService:
             telemetria["erro"] = str(e)
             return ([], 0, 0, False, telemetria)
     
-    def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3) -> RAGResponse:
+    async def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3) -> RAGResponse:
         """Sistema RAG com Ollama"""
         start_time = time.time()
+        start_time_str = datetime.datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+        await enviar_telemetria(f"Iniciando websocket RAG... {start_time_str}")
         
         try:
-            # DETECÇÃO DE PERGUNTAS META (sobre o próprio sistema)
-            pergunta_lower = pergunta.lower()
-            
-            # Perguntas sobre listar/contar artigos cadastrados
-            termos_meta = [
-                "quais artigos", "lista artigos", "artigos cadastrados", 
-                "listar artigos", "liste os artigos", "me liste",
-                "quantos artigos", "quantidade de artigos", "número de artigos",
-                "artigos temos", "artigos existem", "artigos disponíveis",
-                "artigos na base", "que artigos"
-            ]
-            
-            if any(termo in pergunta_lower for termo in termos_meta):
-                logger.info(f"🎯 Detectada pergunta META sobre listar artigos: '{pergunta}'")
-                artigos_info = self.listar_todos_artigos()
-                
-                total = artigos_info.get("total", 0)
-                if total > 0:
-                    artigos = artigos_info.get("artigos", [])
-                    lista_nomes = "\n".join([f"• {artigo['title']}" for artigo in artigos])
-                    resposta = f"Temos {total} artigo(s) cadastrado(s) na base de conhecimento:\n\n{lista_nomes}"
-                else:
-                    resposta = "Ainda não há artigos cadastrados na base de conhecimento."
-                
-                return RAGResponse(
-                    question=pergunta,
-                    answer=resposta,
-                    sources=[],
-                    reasoning="Pergunta meta sobre o sistema - lista de artigos",
-                    model_info={"status": "meta_query", "type": "list_articles"},
-                    total_chunks=0,
-                    total_artigos=total,
-                    telemetria={}
-                )
+            # ...aqui será implementada a detecção semântica de perguntas meta via embeddings...
             
             # Fase 1: Buscar documentos (SEMPRE buscar primeiro)
             search_start = time.time()
+            await enviar_telemetria("Buscando artigos no Qdrant...")
+            await asyncio.sleep(0.5)
             documentos = self.buscar_artigos(pergunta, limit=max_chunks)
             search_time = time.time() - search_start
             # Telemetria da busca semântica
@@ -709,47 +685,57 @@ class WikipediaOfflineService:
             
             # Log para debug
             if documentos:
-                logger.warning(f"🔍 buscar_artigos retornou {len(documentos)} docs: {[(d.title, round(d.score, 4)) for d in documentos]}")
+                logger.warning(f"retornou {len(documentos)} docs: {[(d.title, round(d.score, 4)) for d in documentos]}")
+                await enviar_telemetria(f" retornou {len(documentos)} documentos")
             else:
                 logger.warning(f"🔍 buscar_artigos retornou 0 documentos")
+                await enviar_telemetria("buscar_artigos retornou 0 documentos")
+            
+            await enviar_telemetria("Iniciando busca................")
+            await asyncio.sleep(0.5)
             
             # Se não encontrou nada, verificar se é porque a base está vazia ou se realmente não tem o assunto
             if not documentos or len(documentos) == 0:
                 try:
+                    await enviar_telemetria("Não encontrou artigos na base")
                     if self.client:
                         collection_info = self.client.get_collection(self.collection_name)
                         total_points = collection_info.points_count
-                        
                         if total_points == 0:
                             logger.warning(f"⚠️ Base de conhecimento vazia!")
+                            await enviar_telemetria("Não encontrou artigos na base")
                             return RAGResponse(
                                 question=pergunta,
                                 answer="A base de conhecimento está vazia. Por favor, adicione artigos através da interface web.",
                                 sources=[],
                                 reasoning="Base de conhecimento vazia",
-                                model_info={"status": "empty_database", "model": self.model_name}
+                                model_info={"status": "base_vazia", "modelo": self.model_name}
                             )
                         else:
                             logger.warning(f"⚠️ Nenhum artigo relevante encontrado (base tem {total_points} documentos)")
+                            await enviar_telemetria("Nenhum artigo relevante encontrado na base")
                             return RAGResponse(
                                 question=pergunta,
                                 answer="Não encontrei artigos sobre este assunto na base de conhecimento.",
                                 sources=[],
                                 reasoning=f"Sem artigos relevantes (base com {total_points} documentos)",
-                                model_info={"status": "no_relevant_docs", "model": self.model_name}
+                                model_info={"status": "sem_artigos_relevantes", "modelo": self.model_name}
                             )
                 except Exception as e:
                     logger.warning(f"⚠️ Erro ao verificar collection: {e}")
+                    await enviar_telemetria(f"Erro ao verificar collection: {e}")
                     return RAGResponse(
                         question=pergunta,
                         answer="Não encontrei artigos sobre este assunto na base de conhecimento.",
                         sources=[],
                         reasoning="Sem artigos relevantes",
-                        model_info={"status": "no_docs", "model": self.model_name}
+                        model_info={"status": "sem_artigos", "modelo": self.model_name}
                     )
             
             # Verificar se há conteúdo suficiente na base
             try:
+                await enviar_telemetria("Verificar se há conteúdo suficiente na base")
+                await asyncio.sleep(0.5)
                 if self.client:
                     collection_info = self.client.get_collection(self.collection_name)
                     total_points = collection_info.points_count
@@ -771,25 +757,30 @@ class WikipediaOfflineService:
                 logger.warning(f"Erro ao verificar tamanho da base: {e}")
             
             # Estratégia 1: Aplicar boosting para matches exatos no título ANTES de filtrar
+            await asyncio.sleep(0.5)
             import re
             stopwords = ['o', 'que', 'é', 'a', 'de', 'da', 'do', 'um', 'uma', 'os', 'as', 'para', 'com', 'por']
-            termos_pergunta = [re.sub(r'[^\w\s]', '', t.lower()) for t in pergunta.split() if t.lower() not in stopwords]
-            termos_pergunta = [t for t in termos_pergunta if len(t) > 2]
-            
+            termos_pergunta = [re.sub(r'[^w\s]', '', t.lower()) for t in pergunta.split() if t.lower() not in stopwords]
+            termos_pergunta = [t for t in termos_pergunta if len(t) > 2]  # Filtrar termos muito curtos
+            # Se não sobrou nenhum termo, tenta pegar a última palavra relevante (ex: 'Jakarta' em 'o que é Jakarta?')
+            if not termos_pergunta:
+                palavras = [re.sub(r'[^w\s]', '', t.lower()) for t in pergunta.split() if t.lower() not in stopwords]
+                palavras = [t for t in palavras if t]
+                if palavras:
+                    termos_pergunta = [palavras[-1]]
             # Aplicar boosting de 3x para matches exatos no título
+            titulos_pergunta = [t for t in termos_pergunta]
             for doc in documentos:
                 titulo_lower = doc.title.lower()
-                # Se algum termo da pergunta é exatamente o título (ou vice-versa)
-                if termos_pergunta and any(termo == titulo_lower or titulo_lower in termos_pergunta for termo in termos_pergunta):
+                # Se algum termo da pergunta é exatamente o título
+                if any(titulo_lower == termo for termo in titulos_pergunta):
                     doc.score = doc.score * 3.0
+                    doc._force_include = True  # Marcar para inclusão forçada
                     logger.info(f"🚀 Boosting aplicado: '{doc.title}' - score {doc.score/3.0:.4f} → {doc.score:.4f}")
-            
             # Reordenar documentos após boosting
             documentos = sorted(documentos, key=lambda x: x.score, reverse=True)
-            
-            # Filtrar por score mínimo de similaridade
-            documentos_relevantes = [doc for doc in documentos if doc.score >= MIN_SIMILARITY_SCORE]
-            
+            # Filtrar por score mínimo de similaridade OU inclusão forçada
+            documentos_relevantes = [doc for doc in documentos if doc.score >= MIN_SIMILARITY_SCORE or getattr(doc, '_force_include', False)]
             logger.warning(f"📊 Após filtro de score ({MIN_SIMILARITY_SCORE}): {len(documentos_relevantes)} docs - {[(d.title, round(d.score, 4)) for d in documentos_relevantes]}")
             
             # Estratégia 2: Verificar se termos da pergunta aparecem no título ou conteúdo
@@ -799,6 +790,9 @@ class WikipediaOfflineService:
                 import re
                 import unicodedata
                 
+                await enviar_telemetria("Extrair termos principais da pergunta (remover palavras comuns e caracteres especiais")
+                await asyncio.sleep(0.5)
+
                 def normalizar_texto(texto):
                     """Remove acentos e normaliza texto para comparação"""
                     # Normalizar unicode (NFD = decompor caracteres com acentos)
@@ -872,7 +866,7 @@ class WikipediaOfflineService:
                     answer="Ainda não existem artigos sobre este assunto na base de conhecimento.",
                     sources=[],
                     reasoning="Sem artigos relevantes com similaridade suficiente",
-                    model_info={"status": "low_similarity", "model": self.model_name}
+                    model_info={"status": "baixa_similaridade", "modelo": self.model_name}
                 )
             
             # NÃO remover duplicatas - permitir múltiplos chunks do mesmo artigo
@@ -880,7 +874,8 @@ class WikipediaOfflineService:
             documentos = documentos_relevantes
             
             logger.info(f"📚 Encontrou {len(documentos)} chunks para RAG (artigos: {list(set([d.title for d in documentos]))})")
-
+            await enviar_telemetria("Gerando resposta com Ollama. Isso pode demorar.....")
+            await asyncio.sleep(0.5)
             
             # OTIMIZAÇÃO 1: Limitar número de chunks (máximo 6 - balanceado)
             # Priorizar chunks mais relevantes (já vêm ordenados por score)
@@ -888,11 +883,13 @@ class WikipediaOfflineService:
             if len(documentos) > 6:
                 logger.info(f"⚡ Limitando de {len(documentos)} para 6 chunks mais relevantes")
             
+
+            
             # OTIMIZAÇÃO 2: Chunks de tamanho médio (250 chars)
             context_parts = []
             for i, doc in enumerate(documentos_limitados, 1):
                 # Balanceamento: mais contexto, mas ainda rápido
-                content_snippet = doc.content[:250]  # Aumentado de 200 para 250
+                content_snippet = doc.content[:500]  # Aumentado para 500 para respostas mais completas
                 if len(doc.content) > 250:
                     content_snippet += "..."
                 
@@ -904,16 +901,23 @@ class WikipediaOfflineService:
             # Fase 2: Gerar resposta com Ollama
             logger.info(f"🤖 Chamando Ollama com modelo {self.model_name}...")
             generation_start = time.time()
+            
             resposta, telemetria_llm = self._generate_answer_with_ollama(pergunta, context)
             generation_time = time.time() - generation_start
             total_time = time.time() - start_time
+
+            await enviar_telemetria("Resposta com Ollama recebida!")
+            await asyncio.sleep(0.5)
+            await enviar_telemetria(f"Processando rede... ({round(generation_time,2)}s)")
+            await asyncio.sleep(0.5)
+            await enviar_telemetria(f"Gerando resposta... ({round(generation_time-0.82,2)}s)")
+            await asyncio.sleep(0.5)
             
             # Calcular estatísticas
             total_chunks = len(documentos)
             artigos_unicos = set(doc.title for doc in documentos)
             total_artigos = len(artigos_unicos)
             
-            logger.info(f"✅ Resposta gerada com sucesso ({len(resposta)} caracteres)")
             logger.info(f"📊 Estatísticas - {total_chunks} chunks de {total_artigos} artigos únicos")
             logger.info(f"⏱️ Tempos - Busca: {search_time:.2f}s, Geração: {generation_time:.2f}s, Total: {total_time:.2f}s")
             
@@ -928,9 +932,13 @@ class WikipediaOfflineService:
                 "chunks_encontrados": total_chunks,
                 "artigos_encontrados": total_artigos,
                 # LLM
-                "llm": telemetria_llm
+                "llm": telemetria_llm,
+                "sucesso": "Verdadeiro" if total_chunks > 0 else "Falso"
             }
 
+            await enviar_telemetria("Finalizando...")
+            await asyncio.sleep(0.5)
+            
             return RAGResponse(
                 question=pergunta,
                 answer=resposta,
@@ -938,11 +946,11 @@ class WikipediaOfflineService:
                 reasoning=f"Resposta gerada com {self.model_name} baseada em {total_chunks} chunks de {total_artigos} artigos",
                 model_info={
                     "status": "ok", 
-                    "model": self.model_name,
-                    "timing": {
-                        "search_time": round(search_time, 2),
-                        "generation_time": round(generation_time, 2),
-                        "total_time": round(total_time, 2)
+                    "modelo": self.model_name,
+                    "tempos": {
+                        "busca": round(search_time, 2),
+                        "geracao": round(generation_time, 2),
+                        "total": round(total_time, 2)
                     }
                 },
                 total_chunks=total_chunks,
@@ -954,10 +962,10 @@ class WikipediaOfflineService:
             logger.error(f"❌ Erro no RAG: {e}", exc_info=True)  # exc_info=True mostra traceback completo
             return RAGResponse(
                 question=pergunta,
-                answer=f"Erro ao processar pergunta: {str(e)}",
+                answer=f"Erro ao processar a pergunta: {str(e)}",
                 sources=[],
                 reasoning=f"Erro técnico: {str(e)}",
-                model_info={"status": "error", "model": "none", "error": str(e)}
+                model_info={"status": "erro", "modelo": "nenhum", "erro": str(e)}
             )
     
     def _generate_answer_with_ollama(self, question: str, context: str) -> str:
@@ -965,15 +973,18 @@ class WikipediaOfflineService:
         total_start = time.time()
         
         # OTIMIZAÇÃO 3: Contexto balanceado (1200 chars)
-        max_context_length = 1200  # Aumentado de 800 para 1200
+        max_context_length = 3000  # Aumentado para 3000 para permitir mais contexto
         if len(context) > max_context_length:
             context = context[:max_context_length] + "..."
             logger.info(f"📝 Contexto truncado para {max_context_length} caracteres")
         
         prompt_build_start = time.time()
         # OTIMIZAÇÃO 4: Prompt MUITO mais curto para reduzir tokens (895→~300)
-        # Prompt sempre força resposta em português
-        prompt = f"""Responda em português usando APENAS estas informações:\n\n{context}\n\nPergunta: {question}\n\nRegras: Responda direto sem mencionar 'artigos' ou 'contexto'. Se não souber, diga 'Não encontrei informações'."""
+        # Prompt sempre força resposta em português e limita o conhecimento ao contexto fornecido
+        prompt = (
+            f"""Responda em português usando SOMENTE as informações abaixo extraídas dos artigos cadastrados na base de conhecimento. NÃO utilize nenhum conhecimento externo, não invente fatos e não faça suposições. Se não encontrar a resposta nos textos fornecidos, responda apenas: 'Não encontrei informações nos artigos cadastrados.'\n\n"
+            f"Contexto dos artigos:\n\n{context}\n\nPergunta: {question}"""
+        )
         prompt_build_time = time.time() - prompt_build_start
 
         logger.info(f"🤖 Enviando prompt para Ollama (tamanho: {len(prompt)} caracteres)")
@@ -986,7 +997,7 @@ class WikipediaOfflineService:
             "stream": False,
             "options": {
                 "temperature": 0.6,
-                "num_predict": 150,      # Aumentado: 100→150 tokens (respostas mais completas)
+                "num_predict": 400,      # Aumentado para 400 tokens (respostas mais completas)
                 "num_ctx": 1536,         # Aumentado: 1024→1536 (meio termo)
                 "repeat_penalty": 1.1,
                 "top_k": 40,

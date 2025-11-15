@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # Instalar dependências do sistema para processamento XML e NLP
 RUN apt-get update && apt-get install -y \

@@ -656,7 +656,7 @@
                     </div>
                     <div class="article-meta">
                         <span class="article-chunks">${artigo.chunks} chunks</span>
-                        ${artigo.url ? `<a class="article-link" href="${artigo.url}" target="_blank" onclick="event.stopPropagation()">🔗 Wikipedia</a>` : ''}
+                        ${artigo.url ? `<a class="article-link" href="${artigo.url}" target="_blank" onclick="event.stopPropagation()">🔗 ${escapeHtml(artigo.title)}</a>` : ''}
                     </div>
                 </div>
             `).join('');

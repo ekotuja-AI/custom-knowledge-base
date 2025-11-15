@@ -39,6 +39,7 @@ from .models import (
     User,
     KnowledgeBase
 )
+from .telemetria_ws import router as telemetria_router
 
 # Lifecycle management
 @asynccontextmanager
@@ -337,7 +338,7 @@ async def perguntar_com_rag(request: PerguntarRequest):
     try:
         start_time = time.time()
         
-        resposta_rag = wikipedia_offline_service.perguntar_com_rag(
+        resposta_rag = await wikipedia_offline_service.perguntar_com_rag(
             pergunta=request.pergunta,
             max_chunks=request.max_chunks
         )
@@ -1631,6 +1632,8 @@ async def manipulador_erro_global(request, exc):
         }
     )
 
+
+app.include_router(telemetria_router)
 
 if __name__ == "__main__":
     import uvicorn
