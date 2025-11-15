@@ -427,12 +427,13 @@ docker exec ollama_server ollama list
 
 ---
 
-## 🆕 Novidades e Limpeza
+## 🆕 Novidades Recentes
 
-- Busca semântica agora é **acento/case-insensitive**: "indonesia" encontra "Indonésia"!
-- Filtro final do backend normaliza termos e títulos/conteúdo para garantir resultados robustos.
-- Limpeza automática: pastas de cache e arquivos temporários são removidos com `Remove-Item -Recurse -Force ...` (Windows) ou `rm -rf ...` (Linux).
-- Se notar qualquer problema de busca, reinicie o backend e limpe o cache do navegador (Ctrl+Shift+R).
+- Telemetria incremental via WebSocket: status detalhado da busca e geração exibido em tempo real na interface web.
+- Timer incremental entre mensagens de telemetria: cada etapa do backend é enviada com espaçamento perceptível para melhor UX.
+- Formatação de data/hora nas mensagens de telemetria: datas exibidas em formato legível.
+- Filtro de termos aprimorado: perguntas abertas como "o que é Jakarta?" agora extraem corretamente o termo principal, garantindo resultados relevantes.
+- Troubleshooting atualizado: se a mensagem de status só aparece após a resposta, verifique se o frontend está ouvindo o WebSocket e exibindo incrementalmente.
 
 ---
 
