@@ -241,6 +241,8 @@ class StatusResponse(BaseModel):
     text_splitter_configurado: bool = Field(..., description="Se o text splitter está configurado")
     openai_configurado: bool = Field(..., description="Se o cliente OpenAI está configurado")
     inicializado: bool = Field(..., description="Se o serviço foi completamente inicializado")
+    ollama_disponivel: bool = Field(..., description="Se o Ollama LLM está disponível")
+    modelo_llm: str = Field(..., description="Nome do modelo LLM em uso")
 
 
 class EstatisticasResponse(BaseModel):
