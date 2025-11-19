@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Usar Coleção - Custom Knowledge Base</title>
+    <link rel="stylesheet" href="/static/css/maisn.css">
+    <style>
+        body { background: #f5f6fa; font-family: 'Segoe UI', Arial, sans-serif; }
+        .container { max-width: 420px; margin: 60px auto; background: #fff; border-radius: 16px; box-shadow: 0 2px 16px #0001; padding: 32px; text-align: center; }
+        h2 { color: #4F6EF7; margin-bottom: 18px; }
+        select, button { width: 90%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 1em; }
+        button { background: #4F6EF7; color: #fff; border: none; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #3a54b4; }
+        .msg { margin-top: 18px; color: #4F6EF7; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Escolha uma coleção existente</h2>
+        <select id="colecaoSelect"></select>
+        <button onclick="usarColecao()">Usar</button>
+        <div class="msg" id="msg"></div>
+    </div>
+    <script>
+    async function carregarColecoes() {
+        try {
+            const resp = await fetch('/listar_colecoes');
+            const data = await resp.json();
+            const select = document.getElementById('colecaoSelect');
+            select.innerHTML = '';
+            if (data.colecoes && data.colecoes.length > 0) {
+                data.colecoes.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    select.appendChild(opt);
+                });
+            } else {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'Nenhuma coleção encontrada';
+                select.appendChild(opt);
+            }
+        } catch (e) {
+            document.getElementById('msg').textContent = 'Erro ao carregar coleções.';
+        }
+    }
+    function usarColecao() {
+        const select = document.getElementById('colecaoSelect');
+        const nome = select.value;
+        if (!nome) {
+            document.getElementById('msg').textContent = 'Selecione uma coleção.';
+            return;
+        }
+        document.getElementById('msg').textContent = `Coleção selecionada: ${nome}`;
+        // Aqui você pode redirecionar ou carregar a coleção
+        // location.href = `/colecao/${nome}`;
+    }
+    window.onload = carregarColecoes;
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Usar coleção existente</title>
+    <meta http-equiv="refresh" content="0; url=/static/landing.html" />
+</head>
+<body>
+    <p>Redirecionando para a página correta...</p>
+</body>
+</html>

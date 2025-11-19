@@ -238,9 +238,12 @@ class StatusResponse(BaseModel):
     qdrant_conectado: bool = Field(..., description="Se a conexão com Qdrant está ativa")
     colecoes: int = Field(..., description="Número de coleções no Qdrant")
     modelo_embedding_carregado: bool = Field(..., description="Se o modelo de embedding está carregado")
+    modelo_embedding_nome: str = Field(..., description="Nome do modelo de embedding em uso")
     text_splitter_configurado: bool = Field(..., description="Se o text splitter está configurado")
     openai_configurado: bool = Field(..., description="Se o cliente OpenAI está configurado")
     inicializado: bool = Field(..., description="Se o serviço foi completamente inicializado")
+    ollama_disponivel: bool = Field(..., description="Se o Ollama LLM está disponível")
+    modelo_llm: str = Field(..., description="Nome do modelo LLM em uso")
 
 
 class EstatisticasResponse(BaseModel):
