@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>Custom Knowledge Base</title>
-    <link rel="stylesheet" href="/static/css/maisn.css">
+    <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
-    <div style="width:100%;background:#4F6EF7;padding:10px 0;text-align:center;display:flex;justify-content:center;gap:16px;">
+    <div style="width:100%;background:#4F6EF7;padding:10px 0;display:flex;justify-content:space-between;align-items:center;">
         <a href="/static/landing.html" class="top-btn">Ir para Landing Page</a>
+        <div id="qdrant-collections-top" style="margin-right:32px;">
+            <label for="qdrant-collections-dropdown" style="color:#fff;font-weight:bold;margin-right:8px;">Coleções Qdrant:</label>
+            <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:220px;"></select>
+        </div>
     </div>
     <style>
     .top-btn {
@@ -78,12 +82,7 @@
         </div>
 
         <div class="card" id="qdrant-collections-card" style="margin: 24px 0;">
-            <h2>Coleções existentes no Qdrant</h2>
-            <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:220px;">
-                <option value="">Selecione uma coleção</option>
-            </select>
-            <button id="open-collection-session" disabled style="margin-left:12px;padding:6px 18px;border-radius:6px;font-size:1em;">Abrir sessão</button>
-        </div>
+        <!-- Card de coleções removido, dropdown está no topo -->
 
         <!-- Botão para ver artigos -->
         <div style="text-align: center; margin-bottom: 30px;">

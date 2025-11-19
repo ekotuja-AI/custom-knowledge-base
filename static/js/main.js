@@ -43,11 +43,13 @@ function iniciarWebSocketTelemetria() {
 
 async function loadStats() {
     try {
-        const statsResp = await fetch('/estatisticas');
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        const colecao = dropdown && dropdown.value ? dropdown.value : '';
+        const statsResp = await fetch(`/estatisticas${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
         const stats = await statsResp.json();
         document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
         document.getElementById('totalArtigos').textContent = stats.total_artigos ? stats.total_artigos : '0';
-        const statusResp = await fetch('/status');
+        const statusResp = await fetch(`/status${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
         const status = await statusResp.json();
         document.getElementById('qdrantStatus').textContent = status.qdrant_conectado ? 'Conectado' : 'Desconectado';
         document.getElementById('embeddingStatus').textContent = status.modelo_embedding_carregado ? 'Carregado'  : 'Indisponível';
@@ -74,10 +76,13 @@ async function performSearch() {
     resultsDiv.innerHTML = '<div class="loading">Buscando...</div>';
     const t0 = performance.now();
     try {
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        const colecao = dropdown && dropdown.value ? dropdown.value : '';
+        console.log("Coleção selecionada para busca:", colecao);
         const response = await fetch('/buscar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, limite: limit })
+            body: JSON.stringify({ query, limit, colecao })
         });
         const t1 = performance.now();
         const data = await response.json();
@@ -105,6 +110,7 @@ async function performSearch() {
         if (data.telemetria) {
             html += `<div class="timing-breakdown" style="margin-top:18px;">
                 <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
+                <div><b>Coleção usada:</b> ${data.telemetria.colecao_usada ? data.telemetria.colecao_usada : '(não informada)'}</div>
                 <div>Tempo total: <b>${data.telemetria.tempo_total_ms} ms</b></div>
                 <div>Tempo busca Qdrant: <b>${data.telemetria.tempo_busca_qdrant_ms} ms</b></div>
                 <div>Tempo filtragem: <b>${data.telemetria.tempo_filtragem_ms} ms</b></div>
@@ -129,10 +135,12 @@ async function askQuestion() {
     document.getElementById('telemetriaDetalhada').innerHTML = '';
     const t0 = performance.now();
     try {
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        const colecao = dropdown && dropdown.value ? dropdown.value : '';
         const response = await fetch('/perguntar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pergunta: question, max_chunks: maxChunks })
+            body: JSON.stringify({ pergunta: question, max_chunks: maxChunks, colecao })
         });
         const t1 = performance.now();
         const data = await response.json();
@@ -165,6 +173,7 @@ async function askQuestion() {
             document.getElementById('telemetriaDetalhada').innerHTML = `
                 <div class="timing-breakdown" style="margin-top:8px;">
                     <div class="timing-breakdown-title">📊 Telemetria Detalhada</div>
+                    <div><b>Coleção usada:</b> ${t.colecao_usada ? t.colecao_usada : '(não informada)'}</div>
                     <div>Tempo total: <b>${t.tempo_total_ms ?? '-'}</b> ms</div>
                     <div>Tempo busca Qdrant: <b>${t.tempo_busca_qdrant_ms ?? '-'}</b> ms</div>
                     <div>Tempo filtragem: <b>${t.tempo_filtragem_ms ?? '-'}</b> ms</div>
@@ -188,10 +197,12 @@ async function addArticle() {
     const resultsDiv = document.getElementById('addResults');
     resultsDiv.innerHTML = '<div class="loading">Adicionando artigo...</div>';
     try {
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        const colecao = dropdown && dropdown.value ? dropdown.value : '';
         const response = await fetch('/adicionar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ titulo: title })
+            body: JSON.stringify({ titulo: title, colecao })
         });
         const data = await response.json();
         if (data.chunks_adicionados) {
@@ -264,12 +275,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropdown = document.getElementById('qdrant-collections-dropdown');
     const openBtn = document.getElementById('open-collection-session');
     dropdown.addEventListener('change', function() {
-        openBtn.disabled = !dropdown.value;
+        if (openBtn) openBtn.disabled = !dropdown.value;
+        // Atualiza os cards Qdrant, Embedding Model e Ollama LLM ao mudar a coleção
+        loadStats();
     });
-    openBtn.addEventListener('click', function() {
-        if (dropdown.value) {
-            // Open index.html in a new tab, optionally with query param for collection
-            window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
-        }
-    });
+    if (openBtn) {
+        openBtn.addEventListener('click', function() {
+            if (dropdown.value) {
+                // Open index.html in a new tab, optionally with query param for collection
+                window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
+            }
+        });
+    }
 });

@@ -1,3 +1,5 @@
+# Dependência para integração com Qdrant
+qdrant-client
 # Para detecção semântica de perguntas meta
 sentence-transformers
 # Dependências para integração MySQL

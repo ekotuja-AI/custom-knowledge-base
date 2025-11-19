@@ -1,9 +1,9 @@
-
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
 # Definir o app ANTES de qualquer rota
 app = FastAPI()
+
 
 # Rota para servir landing.html diretamente
 @app.get("/landing.html")
@@ -11,6 +11,14 @@ async def serve_landing():
     import os
     base_dir = os.path.dirname(os.path.abspath(__file__))
     static_path = os.path.join(base_dir, "..", "static", "landing.html")
+    return FileResponse(static_path)
+
+# Rota para servir criar_colecao.html diretamente
+@app.get("/criar_colecao.html")
+async def serve_criar_colecao():
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_path = os.path.join(base_dir, "..", "static", "criar_colecao.html")
     return FileResponse(static_path)
 
 import logging
@@ -136,7 +144,10 @@ app.add_middleware(
 )
 
 # Montar diretório de arquivos estáticos
-from api import models
+try:
+    from qdrant_client.http import models
+except ImportError:
+    models = None
 static_path = Path(__file__).parent.parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
@@ -145,12 +156,23 @@ if static_path.exists():
 from fastapi import Request
 @app.post("/criar_colecao")
 async def criar_colecao(request: Request):
-    """Cria uma coleção no Qdrant com o nome fornecido"""
+    """Cria uma coleção no Qdrant com o nome e modelo de embedding fornecidos"""
     try:
         data = await request.json()
         nome = data.get("nome", "").strip()
+        modelo = data.get("modelo", "bge-large-pt").strip()
         if not nome:
             return {"sucesso": False, "erro": "Nome da coleção não informado."}
+        # Definir dimensão do vetor conforme modelo
+        # Exemplos: bge-large-pt: 1024, bge-base-pt: 768, multi-qa-MiniLM-L6-cos-v1: 384
+        modelo_dimensoes = {
+            "bge-large-pt": 1024,
+            "bge-base-pt": 768,
+            "bge-large-en": 1024,
+            "bge-base-en": 768,
+            "multi-qa-MiniLM-L6-cos-v1": 384
+        }
+        dim = modelo_dimensoes.get(modelo, 384)
         # Criar coleção usando Qdrant
         if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
             qdrant_client = wikipedia_offline_service.client
@@ -163,11 +185,11 @@ async def criar_colecao(request: Request):
                 qdrant_client.create_collection(
                     collection_name=nome,
                     vectors_config=models.VectorParams(
-                        size=384,
+                        size=dim,
                         distance=models.Distance.COSINE
                     )
                 )
-                return {"sucesso": True}
+                return {"sucesso": True, "modelo": modelo, "dimensao": dim}
             except Exception as e:
                 return {"sucesso": False, "erro": f"Erro ao criar coleção: {str(e)}"}
         else:
@@ -261,11 +283,14 @@ async def api_info():
     }
 
 
+
+from fastapi import Query
+
 @app.get("/status", response_model=StatusResponse)
-async def verificar_status():
-    """Verifica status de todos os componentes"""
+async def verificar_status(colecao: str = Query(None)):
+    """Verifica status de todos os componentes, opcionalmente para uma coleção específica"""
     try:
-        status_info = wikipedia_offline_service.verificar_status()
+        status_info = wikipedia_offline_service.verificar_status(colecao)
         return StatusResponse(**status_info)
     except Exception as e:
         return StatusResponse(
@@ -278,11 +303,12 @@ async def verificar_status():
         )
 
 
+
 @app.get("/estatisticas")
-async def obter_estatisticas():
-    """Estatísticas da base de conhecimento"""
+async def obter_estatisticas(colecao: str = Query(None)):
+    """Estatísticas da base de conhecimento, opcionalmente para uma coleção específica"""
     try:
-        return wikipedia_offline_service.obter_estatisticas()
+        return wikipedia_offline_service.obter_estatisticas(colecao)
     except Exception as e:
         return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
 
@@ -303,6 +329,9 @@ async def buscar_artigos(request: BuscarRequest):
     try:
         import time
         start_time = time.time()
+
+        print(f"############## buscar ####################################")  
+        print(f"############# Iniciando busca : {request}")
         
         telemetria = {
             "tempo_busca_qdrant_ms": 0,
@@ -316,9 +345,26 @@ async def buscar_artigos(request: BuscarRequest):
         
         # Fase 1: Busca no Qdrant
         inicio_busca = time.time()
+        colecao = None
+        if hasattr(request, 'colecao') and request.colecao:
+            colecao = request.colecao
+        elif hasattr(request, 'base') and request.base:
+            colecao = request.base
+        elif hasattr(request, 'collection') and request.collection:
+            colecao = request.collection
+        print(f"############# Coleção usada na busca na API: {colecao}")    
+        # Tenta também pegar da query string se vier via GET
+        import inspect
+        if not colecao:
+            frame = inspect.currentframe()
+            if frame:
+                params = frame.f_back.f_locals.get('request', None)
+                if params:
+                    colecao = getattr(params, 'colecao', None)
         resultados = wikipedia_offline_service.buscar_artigos(
             query=request.query,
-            limit=request.limit
+            limit=request.limit,
+            colecao=colecao
         )
         telemetria["tempo_busca_qdrant_ms"] = round((time.time() - inicio_busca) * 1000, 2)
         telemetria["resultados_antes_filtro"] = len(resultados) if resultados else 0
@@ -362,6 +408,7 @@ async def buscar_artigos(request: BuscarRequest):
         end_time = time.time()
         tempo_busca_ms = (end_time - start_time) * 1000
         telemetria["tempo_total_ms"] = round(tempo_busca_ms, 2)
+        telemetria["colecao_usada"] = colecao
         
         # Converter para modelos Pydantic
         resultados_modelo = [
@@ -398,8 +445,11 @@ async def buscar_previa(request: PerguntarRequest):
         # Executar busca (agora retorna telemetria também)
         documentos, total_chunks, total_artigos, encontrou, telemetria_busca = wikipedia_offline_service.buscar_para_rag(
             pergunta=request.pergunta,
-            max_chunks=request.max_chunks
+            max_chunks=request.max_chunks,
+            colecao=getattr(request, 'colecao', None)
         )
+        # Adiciona o nome da coleção usada à telemetria
+        telemetria_busca["colecao_usada"] = getattr(request, 'colecao', None)
         
         search_time = (time.time() - start_time) * 1000
         
@@ -433,38 +483,50 @@ async def buscar_previa(request: PerguntarRequest):
 
 @app.post("/perguntar", response_model=RAGResponseModel)
 async def perguntar_com_rag(request: PerguntarRequest):
-    """Responde perguntas usando RAG offline com Phi-3"""
+    """Responde perguntas usando RAG offline """
     try:
         start_time = time.time()
+        colecao = getattr(request, 'colecao', None)
+
+        print(f"########## API /perguntar ##### coleção  {colecao} ##########################################")  
+        print(f"############# Iniciando perguntar : {request}")
         
         resposta_rag = await wikipedia_offline_service.perguntar_com_rag(
             pergunta=request.pergunta,
-            max_chunks=request.max_chunks
+            max_chunks=request.max_chunks,
+            colecao=colecao
         )
-        
         end_time = time.time()
         tempo_processamento_ms = (end_time - start_time) * 1000
-        
+
+        # Monta telemetria mesmo se não houver resposta
+        telemetria = resposta_rag.telemetria if resposta_rag and resposta_rag.telemetria is not None else {}
+        telemetria["colecao_usada"] = getattr(request, 'colecao', None)
+        telemetria["tempo_total_ms"] = round(tempo_processamento_ms, 2)
+        telemetria["sucesso"] = bool(resposta_rag and resposta_rag.answer)
+
         # Converter fontes para modelos Pydantic
-        fontes_modelo = [
-            WikipediaResultModel(
-                title=fonte.title,
-                content=fonte.content,
-                url=fonte.url,
-                score=fonte.score
-            )
-            for fonte in resposta_rag.sources
-        ]
+        fontes_modelo = []
+        if resposta_rag and resposta_rag.sources:
+            fontes_modelo = [
+                WikipediaResultModel(
+                    title=fonte.title,
+                    content=fonte.content,
+                    url=fonte.url,
+                    score=fonte.score
+                )
+                for fonte in resposta_rag.sources
+            ]
 
         return RAGResponseModel(
-            pergunta=resposta_rag.question,
-            resposta=resposta_rag.answer,
+            pergunta=getattr(resposta_rag, 'question', request.pergunta),
+            resposta=getattr(resposta_rag, 'answer', None),
             fontes=fontes_modelo,
-            raciocinio=resposta_rag.reasoning,
+            raciocinio=getattr(resposta_rag, 'reasoning', None),
             tempo_processamento_ms=tempo_processamento_ms,
-            total_chunks=resposta_rag.total_chunks,
-            total_artigos=resposta_rag.total_artigos,
-            telemetria=resposta_rag.telemetria
+            total_chunks=getattr(resposta_rag, 'total_chunks', 0),
+            total_artigos=getattr(resposta_rag, 'total_artigos', 0),
+            telemetria=telemetria
         )
         
     except Exception as e:
@@ -476,29 +538,30 @@ async def perguntar_com_rag(request: PerguntarRequest):
 
 @app.post("/adicionar", response_model=AdicionarArtigoResponse)
 async def adicionar_artigo(request: AdicionarArtigoRequest):
-    """Adiciona artigo da Wikipedia à base local"""
+    """Adiciona artigo da Wikipedia à base local na coleção selecionada"""
     try:
+        colecao = getattr(request, 'colecao', None)
+
+        logger.info(f"Adicionando artigo '{request.titulo}' à coleção '{colecao}'")
+
         chunks_adicionados = wikipedia_offline_service.adicionar_artigo_wikipedia(
-            request.titulo
+            request.titulo,
+            colecao=colecao
         )
-        
         if chunks_adicionados == 0:
-            raise HTTPException(
+            raise HTTPException(    
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Artigo '{request.titulo}' não encontrado ou erro no processamento"
             )
-        
-        # Construir URL da Wikipedia
         url_titulo = request.titulo.replace(" ", "_")
         url = f"https://pt.wikipedia.org/wiki/{url_titulo}"
-        
         return AdicionarArtigoResponse(
+            colecao = colecao,
             message="Artigo adicionado com sucesso à base offline",
             titulo=request.titulo,
             url=url,
             chunks_adicionados=chunks_adicionados
         )
-        
     except HTTPException:
         raise
     except Exception as e:
@@ -1232,12 +1295,12 @@ async def simular_download_dump():
                 "message": "Dump simulado já existe",
                 "filename": filename,
                 "size_mb": round(filepath.stat().st_size / (1024 * 1024), 2),
-                "status": "existente"
+                "status": "existente",
+                "uso": f"Use POST /dumps/processar com filename='{filename}'"
             }
         
         # Criar conteúdo XML simulado maior
         xml_content = '''<?xml version="1.0" encoding="UTF-8"?>
-<mediawiki xmlns="http://www.mediawiki.org/xml/export-0.10/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="0.10" xml:lang="pt">
   <siteinfo>
     <sitename>Wikipedia Simulada</sitename>
     <dbname>ptwiki_simulado</dbname>
