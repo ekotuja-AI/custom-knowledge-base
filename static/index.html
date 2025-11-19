@@ -1,19 +1,39 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <title>Custom Knowledge Base</title>
+    <link rel="stylesheet" href="/static/css/maisn.css">
+</head>
+<body>
+    <div style="width:100%;background:#4F6EF7;padding:10px 0;text-align:center;display:flex;justify-content:center;gap:16px;">
+        <a href="/static/landing.html" class="top-btn">Ir para Landing Page</a>
+    </div>
+    <style>
+    .top-btn {
+        display: inline-block;
+        background: #fff;
+        color: #4F6EF7;
+        font-weight: bold;
+        font-size: 1.05em;
+        text-decoration: none;
+        border-radius: 6px;
+        padding: 8px 18px;
+        margin: 0 2px;
+        box-shadow: 0 1px 6px #0001;
+        transition: background 0.2s, color 0.2s;
+    }
+    .top-btn:hover {
+        background: #4F6EF7;
+        color: #fff;
+    }
+    </style>
     <title>Wikipedia Offline RAG - Interface Web</title>
     
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
     <div class="container" id="mainContainer">
-        <div id="progressoPergunta" style="background:#fff; color:#333; padding:10px; margin-bottom:20px; border-radius:8px; min-height:40px;"></div>
-        <button onclick="iniciarWebSocketProgresso()">Mostrar Progresso da Pergunta</button>
         <div class="header">
             <h1>🧠 Wikipedia Offline RAG</h1>
             <p>Sistema de busca semântica e perguntas com IA - 100% Offline</p>
@@ -40,22 +60,29 @@
         <div class="stats" id="stats">
         <!-- painel de telemetria removido -->
             <div class="stat-card">
-                <div class="stat-value" id="totalChunks">...</div>
-                <div class="stat-label">Chunks na Base</div>
+                <div class="stat-value">Qdrant</div>
+                <div class="stat-label"><b>Status:</b> <span id="qdrantStatus">...</span></div>
+                <div class="stat-label"><b>Artigos na Base:</b> <span id="totalArtigos">...</span></div>
+                <div class="stat-label"><b>Chunks na Base:</b> <span id="totalChunks">...</span></div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="qdrantStatus">...</div>
-                <div class="stat-label">Status Qdrant</div>
+                <div class="stat-value" id="embeddingname">Embedding Model</div>
+                <div class="stat-label"><b>Status:</b> <span id="embeddingStatus">...</span></div>
+                <div class="stat-label"><b>Modelo:</b> <span id="modeloEmbedding"></span></div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="embeddingStatus">...</div>
-                <div class="stat-label">Embedding Model</div>
+                <div class="stat-value ">Ollama LLM</div>
+                <div class="stat-label"><b>Status:</b> <span id="ollamaStatus">...</span></div>
+                <div class="stat-label"><b>Modelo:</b> <span id="modeloLLM"></span></div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="ollamaStatus">...</div>
-                <div class="stat-label">Ollama LLM</div>
-                <div class="stat-label" id="modeloLLM"></div>
-            </div>
+        </div>
+
+        <div class="card" id="qdrant-collections-card" style="margin: 24px 0;">
+            <h2>Coleções existentes no Qdrant</h2>
+            <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:220px;">
+                <option value="">Selecione uma coleção</option>
+            </select>
+            <button id="open-collection-session" disabled style="margin-left:12px;padding:6px 18px;border-radius:6px;font-size:1em;">Abrir sessão</button>
         </div>
 
         <!-- Botão para ver artigos -->

@@ -77,15 +77,14 @@ class RAGResponse:
 
 
 class WikipediaOfflineService:
-
     """Serviço Wikipedia offline funcional"""
-    
     def __init__(self):
         self.client = None
         self.collection_name = "wikipedia_langchain"
         self.ollama_host = os.getenv("OLLAMA_HOST", "ollama")
         self.ollama_port = int(os.getenv("OLLAMA_PORT", "11434"))
-        # Forçar modelo LLM correto para português
+        # Modelos separados para embedding e LLM
+        self.embedding_model_name = os.getenv("EMBEDDING_MODEL", "bge-large-pt")
         self.model_name = os.getenv("LLM_MODEL", "phi3")
         self._initialized = False
         
@@ -982,7 +981,9 @@ class WikipediaOfflineService:
         # OTIMIZAÇÃO 4: Prompt MUITO mais curto para reduzir tokens (895→~300)
         # Prompt sempre força resposta em português e limita o conhecimento ao contexto fornecido
         prompt = (
-            f"""Responda em português usando SOMENTE as informações abaixo extraídas dos artigos cadastrados na base de conhecimento. NÃO utilize nenhum conhecimento externo, não invente fatos e não faça suposições. Se não encontrar a resposta nos textos fornecidos, responda apenas: 'Não encontrei informações nos artigos cadastrados.'\n\n"
+            f"""Responda em português usando SOMENTE as informações abaixo extraídas dos artigos cadastrados na base de conhecimento. 
+               NÃO utilize nenhum conhecimento externo, não invente fatos e não faça suposições. Se não encontrar a resposta nos textos fornecidos, 
+               responda apenas: 'Não encontrei informações nos artigos cadastrados. Mas verifique todos artigos.'\n\n"
             f"Contexto dos artigos:\n\n{context}\n\nPergunta: {question}"""
         )
         prompt_build_time = time.time() - prompt_build_start
@@ -1085,10 +1086,31 @@ class WikipediaOfflineService:
         try:
             if self.client:
                 collection_info = self.client.get_collection(self.collection_name)
+                # Buscar número de artigos únicos
+                all_points = []
+                offset = None
+                while True:
+                    result = self.client.scroll(
+                        collection_name=self.collection_name,
+                        limit=100,
+                        offset=offset,
+                        with_payload=True,
+                        with_vectors=False
+                    )
+                    points, offset = result
+                    all_points.extend(points)
+                    if offset is None:
+                        break
+                artigos_dict = {}
+                for point in all_points:
+                    title = point.payload.get('title', 'Sem título')
+                    artigos_dict[title] = True
+                total_artigos = len(artigos_dict)
                 return {
                     "sistema_offline": True,
                     "colecao": self.collection_name,
                     "total_chunks": collection_info.points_count,
+                    "total_artigos": total_artigos,
                     "dimensoes_vetor": collection_info.config.params.vectors.size,
                     "distancia": collection_info.config.params.vectors.distance.value,
                     "modelo_llm": self.model_name,
@@ -1099,6 +1121,7 @@ class WikipediaOfflineService:
                     "sistema_offline": True,
                     "colecao": "nao_conectado",
                     "total_chunks": 0,
+                    "total_artigos": 0,
                     "status": "modo_exemplo"
                 }
         except Exception as e:
@@ -1229,11 +1252,15 @@ class WikipediaOfflineService:
         """Status completo do sistema"""
         # Verifica número de coleções no Qdrant
         colecoes_count = 0
+        colecoes_lista = []
         if self.client:
             try:
-                colecoes_count = len(self.client.get_collections().collections)
+                colecoes_obj = self.client.get_collections()
+                colecoes_count = len(colecoes_obj.collections)
+                colecoes_lista = [col.name for col in colecoes_obj.collections]
             except Exception:
                 colecoes_count = 0
+                colecoes_lista = []
 
         # Campos obrigatórios do modelo StatusResponse
         # Verificar status do Ollama
@@ -1252,7 +1279,9 @@ class WikipediaOfflineService:
             "status": "ok" if self._initialized else "error",
             "qdrant_conectado": self.client is not None,
             "colecoes": colecoes_count,
+            "colecoes_lista": colecoes_lista,
             "modelo_embedding_carregado": True,  # ajuste conforme lógica real
+            "modelo_embedding_nome": self.embedding_model_name,
             "text_splitter_configurado": True,    # ajuste conforme lógica real
             "openai_configurado": False,
             "inicializado": self._initialized,

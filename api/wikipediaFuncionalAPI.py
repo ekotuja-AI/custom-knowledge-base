@@ -1,3 +1,18 @@
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
+
+# Definir o app ANTES de qualquer rota
+app = FastAPI()
+
+# Rota para servir landing.html diretamente
+@app.get("/landing.html")
+async def serve_landing():
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_path = os.path.join(base_dir, "..", "static", "landing.html")
+    return FileResponse(static_path)
+
 import logging
 
 # Configurar logging com nivel DEBUG para ver todos os logs
@@ -41,6 +56,27 @@ from .models import (
 )
 from .telemetria_ws import router as telemetria_router
 
+# Endpoint para listar coleções do Qdrant
+
+@app.get("/listar_colecoes")
+async def listar_colecoes():
+    """Retorna lista de coleções existentes no Qdrant, destacando wikipedia_langchain se presente"""
+    try:
+        colecoes = []
+        langchain_encontrada = False
+        if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
+            qdrant_client = wikipedia_offline_service.client
+            result = qdrant_client.get_collections()
+            if hasattr(result, "collections"):
+                colecoes = [c.name for c in result.collections]
+                langchain_encontrada = "wikipedia_langchain" in colecoes
+        return {
+            "colecoes": colecoes,
+            "wikipedia_langchain": langchain_encontrada
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"erro": f"Erro ao consultar coleções: {str(e)}"})
+
 # Lifecycle management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +98,34 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Rota para servir landing.html diretamente
+@app.get("/landing.html")
+async def serve_landing():
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    static_path = os.path.join(base_dir, "..", "static", "landing.html")
+    return FileResponse(static_path)
+
+# Endpoint para listar coleções do Qdrant
+@app.get("/listar_colecoes")
+async def listar_colecoes():
+    """Retorna lista de coleções existentes no Qdrant, destacando wikipedia_langchain se presente"""
+    try:
+        colecoes = []
+        langchain_encontrada = False
+        if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
+            qdrant_client = wikipedia_offline_service.client
+            result = qdrant_client.get_collections()
+            if hasattr(result, "collections"):
+                colecoes = [c.name for c in result.collections]
+                langchain_encontrada = "wikipedia_langchain" in colecoes
+        return {
+            "colecoes": colecoes,
+            "wikipedia_langchain": langchain_encontrada
+        }
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"erro": f"Erro ao consultar coleções: {str(e)}"})
+
 # Configuração CORS
 app.add_middleware(
     CORSMiddleware,
@@ -72,9 +136,44 @@ app.add_middleware(
 )
 
 # Montar diretório de arquivos estáticos
+from api import models
 static_path = Path(__file__).parent.parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+# Endpoint para criar coleção no Qdrant
+from fastapi import Request
+@app.post("/criar_colecao")
+async def criar_colecao(request: Request):
+    """Cria uma coleção no Qdrant com o nome fornecido"""
+    try:
+        data = await request.json()
+        nome = data.get("nome", "").strip()
+        if not nome:
+            return {"sucesso": False, "erro": "Nome da coleção não informado."}
+        # Criar coleção usando Qdrant
+        if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
+            qdrant_client = wikipedia_offline_service.client
+            collections = qdrant_client.get_collections()
+            collection_names = [col.name for col in collections.collections]
+            if nome in collection_names:
+                return {"sucesso": False, "erro": "Coleção já existe."}
+            # Criar coleção
+            try:
+                qdrant_client.create_collection(
+                    collection_name=nome,
+                    vectors_config=models.VectorParams(
+                        size=384,
+                        distance=models.Distance.COSINE
+                    )
+                )
+                return {"sucesso": True}
+            except Exception as e:
+                return {"sucesso": False, "erro": f"Erro ao criar coleção: {str(e)}"}
+        else:
+            return {"sucesso": False, "erro": "Qdrant não está conectado."}
+    except Exception as e:
+        return {"sucesso": False, "erro": f"Erro: {str(e)}"}
 
 # --- MULTIUSUÁRIO: ENDPOINTS ---
 import mysql.connector

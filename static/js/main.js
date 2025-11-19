@@ -46,17 +46,20 @@ async function loadStats() {
         const statsResp = await fetch('/estatisticas');
         const stats = await statsResp.json();
         document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
+        document.getElementById('totalArtigos').textContent = stats.total_artigos ? stats.total_artigos : '0';
         const statusResp = await fetch('/status');
         const status = await statusResp.json();
         document.getElementById('qdrantStatus').textContent = status.qdrant_conectado ? 'Conectado' : 'Desconectado';
-        document.getElementById('embeddingStatus').textContent = status.modelo_embedding_carregado ? 'Carregado' : 'Indisponível';
-        modelo_llm = status.modelo_llm ? status.modelo_llm : 'N/A';
+        document.getElementById('embeddingStatus').textContent = status.modelo_embedding_carregado ? 'Carregado'  : 'Indisponível';
+        document.getElementById('modeloEmbedding').textContent = status.modelo_embedding_nome ? '(' + status.modelo_embedding_nome + ')' : 'Não informado';
+        const modelo_llm = status.modelo_llm ? status.modelo_llm : 'N/A';
         document.getElementById('ollamaStatus').textContent = status.ollama_disponivel ? 'Disponível' : 'Indisponível';
         document.getElementById('modeloLLM').textContent = '(' + modelo_llm + ')';
     } catch (error) {
         document.getElementById('totalChunks').textContent = 'Erro';
         document.getElementById('qdrantStatus').textContent = 'Erro';
         document.getElementById('embeddingStatus').textContent = 'Erro';
+        document.getElementById('modeloEmbedding').textContent = 'Erro';
         document.getElementById('ollamaStatus').textContent = 'Erro';
         document.getElementById('modeloLLM').textContent = '';
     }
@@ -230,3 +233,43 @@ window.askQuestion = askQuestion;
 window.performSearch = performSearch;
 window.addArticle = addArticle;
 window.addRandomArticle = addRandomArticle;
+
+// --- Qdrant Collections Dropdown Logic ---
+async function loadQdrantCollections() {
+    try {
+        const resp = await fetch('/listar_colecoes');
+        const data = await resp.json();
+        const collections = data.colecoes || [];
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        dropdown.innerHTML = '<option value="">Selecione uma coleção</option>';
+        let defaultSet = false;
+        collections.forEach(col => {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = col;
+            if (col === 'wikipedia_langchain' && !defaultSet) {
+                opt.selected = true;
+                defaultSet = true;
+            }
+            dropdown.appendChild(opt);
+        });
+    } catch (err) {
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        dropdown.innerHTML = '<option value="">Erro ao carregar coleções</option>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadQdrantCollections();
+    const dropdown = document.getElementById('qdrant-collections-dropdown');
+    const openBtn = document.getElementById('open-collection-session');
+    dropdown.addEventListener('change', function() {
+        openBtn.disabled = !dropdown.value;
+    });
+    openBtn.addEventListener('click', function() {
+        if (dropdown.value) {
+            // Open index.html in a new tab, optionally with query param for collection
+            window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
+        }
+    });
+});
