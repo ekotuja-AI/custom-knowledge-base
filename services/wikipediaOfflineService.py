@@ -187,13 +187,16 @@ class WikipediaOfflineService:
         except Exception as e:
             logger.warning(f"⚠️ Erro ao conectar com Ollama: {e}")
     
-    def adicionar_artigo_wikipedia(self, titulo: str) -> int:
-        """Adiciona artigo da Wikipedia ao banco vetorial usando LangChain"""
+    def adicionar_artigo_wikipedia(self, titulo: str, colecao: str = None) -> int:
+        """Adiciona artigo da Wikipedia ao banco vetorial usando LangChain na coleção especificada"""
         try:
             if not self._initialized:
                 logger.error("❌ Serviço não inicializado")
                 raise Exception("Serviço não inicializado")
             
+            logger.info(f"🔗 Iniciando adição de artigo com LangChain")
+            logger.info(f"📥############## Coleção: {colecao} adição do artigo  {titulo} com LangChain")
+
             # Buscar artigo na Wikipedia
             logger.info(f"📖 Buscando artigo: {titulo}")
             artigo = self._buscar_artigo_wikipedia(titulo)
@@ -223,14 +226,14 @@ class WikipediaOfflineService:
             )
             
             # Ingerir usando LangChain service
-            chunks_criados = langchain_wikipedia_service.ingerir_documentos([documento])
+            chunks_criados = langchain_wikipedia_service.ingerir_documentos([documento],colecao=colecao)
             logger.info(f"✅ {chunks_criados} chunks criados com LangChain para '{titulo}'")
             
             # Registrar métrica
             self.metrics.record_article_processed(chunks_criados)
             
             # Também adicionar ao sistema legado para compatibilidade
-            chunks_legado = self._processar_e_armazenar_artigo(artigo)
+            #chunks_legado = self._processar_e_armazenar_artigo(artigo, colecao=colecao)
             
             return chunks_criados
             
@@ -242,6 +245,7 @@ class WikipediaOfflineService:
         """Adiciona múltiplos artigos usando pipeline LangChain"""
         try:
             logger.info(f"🔗 Processando {len(titulos)} artigos com LangChain")
+            logger.info("📥#################################### Iniciando ingestão de múltiplos artigos com LangChain")
             
             documentos = []
             resultados = {}
@@ -268,44 +272,47 @@ class WikipediaOfflineService:
                     logger.warning(f"⚠️ Artigo não encontrado: {titulo}")
                     resultados[titulo] = 0
             
-            if documentos:
-                # Ingestão em lote com LangChain
-                total_chunks = langchain_wikipedia_service.ingerir_documentos(documentos)
-                chunks_por_doc = total_chunks // len(documentos) if documentos else 0
-                
-                # Atualizar resultados
-                for titulo in resultados:
-                    if resultados[titulo] == 0 and any(d.title == titulo for d in documentos):
-                        resultados[titulo] = chunks_por_doc
-                
-                logger.info(f"✅ Ingestão LangChain completa: {total_chunks} chunks para {len(documentos)} documentos")
-            
-            return resultados
-            
-        except Exception as e:
-            logger.error(f"❌ Erro na ingestão em lote: {e}")
-            return {titulo: 0 for titulo in titulos}
-    
-    def adicionar_chunk_direto(self, chunk_data: Dict) -> bool:
-        """Adiciona um chunk já processado diretamente ao banco vetorial - usa QdrantHelper"""
-        try:
-            # Validar chunk
-            if not self.validator.validar_chunk(chunk_data):
-                logger.error("❌ Chunk inválido - campos obrigatórios ausentes")
-                return False
-            
-            # Preparar usando helper
-            chunk_id = self.qdrant_helper.gerar_id_unico()
-            payload = self.qdrant_helper.criar_payload_chunk(chunk_data)
-            dummy_vector = self.qdrant_helper.criar_vetor_dummy()
-            
-            # Criar ponto para Qdrant
-            point = PointStruct(
-                id=chunk_id,
-                vector=dummy_vector,
-                payload=payload
-            )
-            
+            try:
+                if not self._initialized:
+                    logger.error("❌ Serviço não inicializado")
+                    raise Exception("Serviço não inicializado")
+                # Buscar artigo na Wikipedia
+                logger.info(f"📖 Buscando artigo: {titulo}")
+                artigo = self._buscar_artigo_wikipedia(titulo)
+                if not artigo:
+                    logger.warning(f"⚠️ Artigo '{titulo}' não encontrado")
+                    return 0
+                # Validar artigo
+                if not self.validator.validar_artigo(artigo):
+                    logger.warning(f"⚠️ Artigo '{titulo}' não passou na validação")
+                    return 0
+                logger.info(f"✅ Artigo encontrado: {artigo['title']}, extract length: {len(artigo.get('extract', ''))}, content length: {len(artigo.get('content', ''))}")
+                # Usar LangChain para processamento
+                logger.info(f"🔗 Processando com LangChain: {titulo}")
+                documento = WikipediaDocument(
+                    title=artigo['title'],
+                    content=artigo['content'],
+                    url=artigo['url'],
+                    metadata={
+                        'source': 'wikipedia_api',
+                        'language': 'pt',
+                        'processed_at': time.strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                )
+                # Patch: set LangChain service collection if provided
+                selected_colecao = colecao if colecao else self.collection_name
+                if hasattr(langchain_wikipedia_service, 'collection_name'):
+                    langchain_wikipedia_service.collection_name = selected_colecao
+                chunks_criados = langchain_wikipedia_service.ingerir_documentos([documento])
+                logger.info(f"✅ {chunks_criados} chunks criados com LangChain para '{titulo}' na coleção '{selected_colecao}'")
+                # Registrar métrica
+                self.metrics.record_article_processed(chunks_criados)
+                # Também adicionar ao sistema legado para compatibilidade
+                chunks_legado = self._processar_e_armazenar_artigo(artigo, colecao=selected_colecao)
+                return chunks_criados
+            except Exception as e:
+                logger.error(f"❌ Erro ao adicionar artigo '{titulo}': {e}")
+                return 0
             # Inserir no Qdrant
             self.client.upsert(
                 collection_name=self.collection_name,
@@ -322,37 +329,47 @@ class WikipediaOfflineService:
         """Busca artigo na Wikipedia API com conteúdo completo - delegado ao WikipediaAPIClient"""
         return self.api_client.buscar_artigo_completo(titulo)
     
-    def _processar_e_armazenar_artigo(self, artigo: Dict) -> int:
-        """Processa artigo em chunks e armazena no Qdrant"""
+    def _processar_e_armazenar_artigo(self, artigo: Dict, colecao: str = None) -> int:
+        """Processa artigo em chunks e armazena no Qdrant na coleção especificada"""
         if not self.client:
             return 0
-            
+        logger.info("📥#################################### Iniciando processamento de artigo para armazenamento legado")
+        logger.info(f"COLEÇÃO: {colecao if colecao else self.collection_name} | TÍTULO: {artigo.get('title', 'Desconhecido')}")
         try:
             # Combinar extract e content
-            texto_completo = f"{artigo['extract']} {artigo['content']}"
-            
+            texto_completo = f"{artigo.get('extract', '')} {artigo.get('content', '')}"
             # Dividir em chunks simples (por parágrafos)
             chunks = self._dividir_em_chunks(texto_completo)
-            
             points = []
+            collection_name = colecao if colecao else self.collection_name
+            # Detectar dimensão do vetor da coleção
+            try:
+                collection_info = self.client.get_collection(collection_name)
+                if hasattr(collection_info, 'vectors_config'):
+                    vectors_config = collection_info.vectors_config
+                    if isinstance(vectors_config, dict):
+                        vector_dim = vectors_config.get('size', vectors_config.get('params', {}).get('size', 384))
+                    else:
+                        vector_dim = getattr(vectors_config, 'size', 384)
+                else:
+                    vector_dim = 384
+            except Exception as e:
+                logger.warning(f"Não foi possível detectar dimensão da coleção '{collection_name}', usando 384. Erro: {e}")
+                vector_dim = 384
             for i, chunk in enumerate(chunks):
                 if len(chunk.strip()) < 50:  # Ignorar chunks muito pequenos
                     continue
-                    
-                # Para simplificar, vamos usar um vetor fake por enquanto
-                # Em produção, usaríamos sentence-transformers aqui
-                fake_vector = [0.1] * 384  # Vetor de 384 dimensões
-                
+                # Vetor fake com dimensão correta
+                vector = [0.1] * int(vector_dim)
                 # Gerar ID único como UUID
                 point_id = str(uuid.uuid4())
-                
                 point = models.PointStruct(
                     id=point_id,
-                    vector=fake_vector,
+                    vector=vector,
                     payload={
-                        "title": artigo['title'],
+                        "title": artigo.get('title', ''),
                         "content": chunk,
-                        "url": artigo['url'],
+                        "url": artigo.get('url', ''),
                         "chunk_index": i,
                         "total_chunks": len(chunks),
                         "description": artigo.get('description', ''),
@@ -360,47 +377,26 @@ class WikipediaOfflineService:
                     }
                 )
                 points.append(point)
-            
             if points:
-                self.client.upsert(
-                    collection_name=self.collection_name,
-                    points=points
-                )
-                
+                try:
+                    self.client.upsert(
+                        collection_name=collection_name,
+                        points=points
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Erro ao inserir pontos no Qdrant: {e}")
+                    return 0
             return len(points)
-            
         except Exception as e:
             logger.error(f"❌ Erro ao processar artigo: {e}")
             return 0
     
-    def _dividir_em_chunks(self, texto: str, max_size: int = 1000) -> List[str]:
-        """Divide texto em chunks por parágrafos"""
-        # Dividir por quebras de linha duplas (parágrafos)
-        paragrafos = texto.split('\n\n')
-        chunks = []
-        chunk_atual = ""
-        
-        for paragrafo in paragrafos:
-            paragrafo = paragrafo.strip()
-            if not paragrafo:
-                continue
-                
-            if len(chunk_atual) + len(paragrafo) < max_size:
-                chunk_atual += paragrafo + "\n\n"
-            else:
-                if chunk_atual:
-                    chunks.append(chunk_atual.strip())
-                chunk_atual = paragrafo + "\n\n"
-        
-        if chunk_atual:
-            chunks.append(chunk_atual.strip())
-            
-        return chunks
-    
-    def buscar_artigos(self, query: str, limit: int = 10) -> List[SearchResult]:
+
+    def buscar_artigos(self, query: str, limit: int = 10,colecao: str = None) -> List[SearchResult]:
         """Busca artigos usando LangChain retriever e fallback para sistema legado"""
         try:
-            logger.info(f"🔍 Buscando por: '{query}' (limite: {limit})")
+            logger.info("******** buscar_artigos ******************************************************")
+            logger.info(f"🔍 Buscando por: '{query}' (limite: {limit}) na coleção {colecao}")
             
             # Primeiro: tentar busca com LangChain
             try:
@@ -408,7 +404,8 @@ class WikipediaOfflineService:
                 langchain_results = langchain_wikipedia_service.buscar_documentos(
                     query=query, 
                     limit=limit,
-                    score_threshold=0.05  # Threshold muito baixo para aceitar mais resultados
+                    score_threshold=0.05,  # Threshold muito baixo para aceitar mais resultados
+                    colecao=colecao 
                 )
                 
                 if langchain_results:
@@ -421,28 +418,25 @@ class WikipediaOfflineService:
                 logger.warning(f"⚠️ Erro na busca LangChain: {e}, usando sistema legado...")
             
             # Fallback: usar sistema legado
-            return self._buscar_artigos_legado(query, limit)
+            logger.info("🔄 Usando sistema de busca legado como fallback...")
+            return self._buscar_artigos_legado(query, limit, colecao=colecao)
             
         except Exception as e:
             logger.error(f"❌ Erro geral na busca: {e}")
             return self._get_sample_results(query, limit)
-    
-    def _buscar_artigos_legado(self, query: str, limit: int = 10) -> List[SearchResult]:
-        """Sistema de busca legado (backup)"""
+
+    def _buscar_artigos_legado(self, query: str, limit: int = 10, colecao: str = None) -> List[SearchResult]:
+        """Sistema de busca legado (backup) por coleção"""
         if not self.client:
             return self._get_sample_results(query, limit)
-            
         try:
-            logger.info(f"🔍 Busca legado por: '{query}' (limite: {limit})")
-            
-            # Estratégia 1: Tentar busca por texto em múltiplos campos
+            collection_name = colecao if colecao else self.collection_name
+            logger.info(f"🔍 Busca legado por: '{query}' (limite: {limit}) na coleção: {collection_name}")
             search_results = None
             query_terms = query.lower().split()
-            
-            # Primeiro: tentar MatchText no conteúdo
             try:
                 search_results = self.client.scroll(
-                    collection_name=self.collection_name,
+                    collection_name=collection_name,
                     scroll_filter=models.Filter(
                         must=[
                             models.FieldCondition(
@@ -457,12 +451,10 @@ class WikipediaOfflineService:
                 logger.info(f"📝 Busca por content encontrou {len(search_results[0])} resultados")
             except Exception as e:
                 logger.warning(f"⚠️ Erro na busca por content: {e}")
-            
-            # Se não encontrou resultados, tentar busca no título
             if not search_results or len(search_results[0]) == 0:
                 try:
                     search_results = self.client.scroll(
-                        collection_name=self.collection_name,
+                        collection_name=collection_name,
                         scroll_filter=models.Filter(
                             must=[
                                 models.FieldCondition(
@@ -477,48 +469,33 @@ class WikipediaOfflineService:
                     logger.info(f"📋 Busca por title encontrou {len(search_results[0])} resultados")
                 except Exception as e:
                     logger.warning(f"⚠️ Erro na busca por title: {e}")
-            
-            # Se ainda não encontrou, fazer busca mais ampla sem filtros e filtrar manualmente
             if not search_results or len(search_results[0]) == 0:
                 logger.info("🔄 Tentando busca manual em todos os documentos...")
                 try:
-                    # Buscar todos os documentos (limitado para não sobrecarregar)
                     all_results = self.client.scroll(
-                        collection_name=self.collection_name,
-                        limit=500,  # Buscar até 500 documentos
+                        collection_name=collection_name,
+                        limit=500,
                         with_payload=True
                     )
-                    
                     logger.info(f"📚 Encontrou {len(all_results[0])} documentos totais")
-                    
-                    # Filtrar manualmente por palavras-chave
                     filtered_results = []
                     for hit in all_results[0]:
                         content = hit.payload.get("content", "").lower()
                         title = hit.payload.get("title", "").lower()
-                        
-                        # Verificar se algum termo da query está no título ou conteúdo
                         score = 0
                         for term in query_terms:
                             if term in title:
-                                score += 3  # Título tem peso maior
+                                score += 3
                             if term in content:
-                                score += 1  # Conteúdo tem peso menor
-                        
+                                score += 1
                         if score > 0:
                             filtered_results.append((hit, score))
-                    
-                    # Ordenar por score e pegar os melhores
                     filtered_results.sort(key=lambda x: x[1], reverse=True)
                     search_results = ([item[0] for item in filtered_results[:limit]], None)
-                    
                     logger.info(f"✅ Busca manual encontrou {len(search_results[0])} resultados relevantes")
-                    
                 except Exception as e:
                     logger.error(f"❌ Erro na busca manual: {e}")
                     search_results = ([], None)
-            
-            # Processar resultados encontrados e unificar por artigo
             artigo_dict = {}
             if search_results and len(search_results[0]) > 0:
                 for hit in search_results[0]:
@@ -548,24 +525,18 @@ class WikipediaOfflineService:
                 resultados_unificados = sorted(resultados_unificados, key=lambda x: x.score, reverse=True)[:limit]
                 logger.info(f"✅ Retornando {len(resultados_unificados)} artigos reais unificados")
                 return resultados_unificados
-            
-            # Processar resultados encontrados
             results = []
             if search_results and len(search_results[0]) > 0:
                 for hit in search_results[0]:
-                    # Calcular score baseado na relevância dos termos
                     content = hit.payload.get("content", "").lower()
                     title = hit.payload.get("title", "").lower()
-                    
-                    score = 0.5  # Score base
+                    score = 0.5
                     for term in query_terms:
                         if term in title:
                             score += 0.3
                         if term in content:
                             score += 0.1
-                    
-                    score = min(score, 1.0)  # Limitar a 1.0
-                    
+                    score = min(score, 1.0)
                     result = SearchResult(
                         title=hit.payload.get("title", ""),
                         content=hit.payload.get("content", ""),
@@ -579,19 +550,15 @@ class WikipediaOfflineService:
                         }
                     )
                     results.append(result)
-                
                 logger.info(f"✅ Retornando {len(results)} resultados reais")
                 return results
-            
-            # Se realmente não encontrou nada, tentar busca de exemplo como último recurso
             logger.warning("⚠️ Nenhum resultado encontrado, usando fallback")
             return self._get_sample_results(query, limit)
-                
         except Exception as e:
             logger.error(f"❌ Erro geral na busca: {e}")
             return self._get_sample_results(query, limit)
     
-    def buscar_para_rag(self, pergunta: str, max_chunks: int = 30) -> tuple[List[SearchResult], int, int, bool, dict]:
+    def buscar_para_rag(self, pergunta: str, max_chunks: int = 30, colecao: str = None) -> tuple[List[SearchResult], int, int, bool, dict]:
         """
         Executa apenas a busca semântica e retorna os resultados com telemetria.
         Retorna: (documentos, total_chunks, total_artigos, encontrou_resultados, telemetria_busca)
@@ -613,7 +580,7 @@ class WikipediaOfflineService:
             inicio_busca = time.time()
             
             # Buscar documentos (inclui embedding + busca no Qdrant)
-            documentos = self.buscar_artigos(pergunta, limit=max_chunks)
+            documentos = self.buscar_artigos(pergunta, limit=max_chunks, colecao=colecao)
             
             tempo_busca = (time.time() - inicio_busca) * 1000
             telemetria["tempo_busca_qdrant_ms"] = round(tempo_busca, 2)
@@ -664,23 +631,26 @@ class WikipediaOfflineService:
             telemetria["erro"] = str(e)
             return ([], 0, 0, False, telemetria)
     
-    async def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3) -> RAGResponse:
-        """Sistema RAG com Ollama"""
+    async def perguntar_com_rag(self, pergunta: str, max_chunks: int = 3, colecao: str = None) -> RAGResponse:
+        """Sistema RAG com Ollama, filtrando por coleção se fornecida"""
         start_time = time.time()
-        start_time_str = datetime.datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
-        await enviar_telemetria(f"Iniciando websocket RAG... {start_time_str}")
+        start_time_str = datetime.datetime.fromtimestamp(start_time).strftime('%d/%m/%Y %H:%M:%S')
+        await enviar_telemetria(f"Iniciando websocket... {start_time_str}")
         
+        logger.info("///// perguntar_com_rag ///////////////////////////////////////////")
+        logger.info(f"🤖 perguntar_com_rag '{pergunta}' (max_chunks={max_chunks}, colecao={colecao})")
+
         try:
             # ...aqui será implementada a detecção semântica de perguntas meta via embeddings...
             
             # Fase 1: Buscar documentos (SEMPRE buscar primeiro)
             search_start = time.time()
-            await enviar_telemetria("Buscando artigos no Qdrant...")
+            await enviar_telemetria(f"Buscando artigos no Qdrant({colecao})")
             await asyncio.sleep(0.5)
-            documentos = self.buscar_artigos(pergunta, limit=max_chunks)
+            documentos = self.buscar_artigos(pergunta, limit=max_chunks, colecao=colecao)
             search_time = time.time() - search_start
             # Telemetria da busca semântica
-            documentos, total_chunks, total_artigos, encontrou_resultados, telemetria_busca = self.buscar_para_rag(pergunta, max_chunks)
+            documentos, total_chunks, total_artigos, encontrou_resultados, telemetria_busca = self.buscar_para_rag(pergunta, max_chunks, colecao=colecao)
             
             # Log para debug
             if documentos:
@@ -1081,17 +1051,18 @@ class WikipediaOfflineService:
         logger.warning(f"⚠️ Nenhum resultado encontrado para '{query}' - retornando lista vazia")
         return []
     
-    def obter_estatisticas(self) -> Dict[str, Any]:
-        """Estatísticas da base Wikipedia"""
+    def obter_estatisticas(self, colecao=None) -> Dict[str, Any]:
+        """Estatísticas da base Wikipedia ou coleção escolhida"""
         try:
+            collection_name = colecao if colecao else self.collection_name
             if self.client:
-                collection_info = self.client.get_collection(self.collection_name)
+                collection_info = self.client.get_collection(collection_name)
                 # Buscar número de artigos únicos
                 all_points = []
                 offset = None
                 while True:
                     result = self.client.scroll(
-                        collection_name=self.collection_name,
+                        collection_name=collection_name,
                         limit=100,
                         offset=offset,
                         with_payload=True,
@@ -1108,7 +1079,7 @@ class WikipediaOfflineService:
                 total_artigos = len(artigos_dict)
                 return {
                     "sistema_offline": True,
-                    "colecao": self.collection_name,
+                    "colecao": collection_name,
                     "total_chunks": collection_info.points_count,
                     "total_artigos": total_artigos,
                     "dimensoes_vetor": collection_info.config.params.vectors.size,
@@ -1197,7 +1168,7 @@ class WikipediaOfflineService:
                 logger.info(f"⚠️ Coleção {self.collection_name} não existia")
             
             # Recriar coleção vazia
-            self._criar_colecao()
+            self._criar_colecao(self)
             logger.info(f"✅ Coleção {self.collection_name} recriada vazia")
             return True
             
@@ -1214,6 +1185,7 @@ class WikipediaOfflineService:
             points = []
             
             for chunk_data in chunk_batch:
+                # TODO: Gerar embedding real aqui
                 # Para simplificar, usar vetor fake (em produção seria embeddings reais)
                 fake_vector = [0.1] * 384
                 
@@ -1248,11 +1220,12 @@ class WikipediaOfflineService:
             logger.error(f"❌ Erro ao processar lote: {e}")
             return 0
     
-    def verificar_status(self) -> Dict[str, Any]:
-        """Status completo do sistema"""
+    def verificar_status(self, colecao=None) -> Dict[str, Any]:
+        """Status completo do sistema, opcionalmente para uma coleção específica"""
         # Verifica número de coleções no Qdrant
         colecoes_count = 0
         colecoes_lista = []
+        collection_name = colecao if colecao else self.collection_name
         if self.client:
             try:
                 colecoes_obj = self.client.get_collections()
@@ -1275,9 +1248,11 @@ class WikipediaOfflineService:
         except Exception:
             ollama_disponivel = False
 
+        # Se quiser retornar status da coleção específica, pode customizar aqui
         return {
             "status": "ok" if self._initialized else "error",
             "qdrant_conectado": self.client is not None,
+            "colecao": collection_name,
             "colecoes": colecoes_count,
             "colecoes_lista": colecoes_lista,
             "modelo_embedding_carregado": True,  # ajuste conforme lógica real

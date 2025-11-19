@@ -18,12 +18,14 @@
     <div class="container">
         <h2>Criar uma nova coleção</h2>
         <input type="text" id="nomeColecao" placeholder="Nome da coleção" />
+        <input type="text" id="modeloEmbed" placeholder="Modelo de embedding (ex: bge-large-pt)" value="bge-large-pt" />
         <button onclick="criarColecao()">Criar</button>
         <div class="msg" id="msg"></div>
     </div>
     <script>
     async function criarColecao() {
         const nome = document.getElementById('nomeColecao').value.trim();
+        const modelo = document.getElementById('modeloEmbed').value;
         if (!nome) {
             document.getElementById('msg').textContent = 'Digite um nome para a coleção.';
             return;
@@ -33,7 +35,7 @@
             const resp = await fetch('/criar_colecao', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nome })
+                body: JSON.stringify({ nome, modelo })
             });
             const data = await resp.json();
             if (data.sucesso) {

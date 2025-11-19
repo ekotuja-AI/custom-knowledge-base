@@ -11,6 +11,7 @@ Graceful fallback se LangChain não estiver disponível.
 """
 
 import os
+import os
 import time
 import logging
 import uuid
@@ -27,52 +28,42 @@ try:
     LANGCHAIN_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("✅ LangChain disponível")
-except ImportError as e:
+except ImportError:
     LANGCHAIN_AVAILABLE = False
     logger = logging.getLogger(__name__)
     logger.warning(f"⚠️ LangChain não disponível: {e}")
-    
-    # Create dummy classes for compatibility
+
+    # Fallback dummy classes
     class Document:
         def __init__(self, page_content: str, metadata: Dict[str, Any]):
             self.page_content = page_content
             self.metadata = metadata
-    
     class BaseRetriever:
         pass
-    
     class CallbackManagerForRetrieverRun:
         pass
-    
     class RecursiveCharacterTextSplitter:
         def __init__(self, **kwargs):
             self.chunk_size = kwargs.get('chunk_size', 1000)
             self.chunk_overlap = kwargs.get('chunk_overlap', 200)
-        
-        def split_documents(self, documents: List[Document]) -> List[Document]:
-            """Fallback text splitter"""
+        def split_documents(self, documents: List['Document']) -> List['Document']:
             chunks = []
             for doc in documents:
                 text = doc.page_content
                 chunk_size = self.chunk_size
                 overlap = self.chunk_overlap
-                
-                # Simple text splitting
                 start = 0
                 while start < len(text):
                     end = start + chunk_size
                     chunk_text = text[start:end]
-                    
                     chunk = Document(
                         page_content=chunk_text,
                         metadata=doc.metadata.copy()
                     )
                     chunks.append(chunk)
-                    
                     start = end - overlap
                     if start >= len(text):
                         break
-                        
             return chunks
 
 # Vector store and embeddings
@@ -363,22 +354,55 @@ class LangChainWikipediaService:
         
         logger.info("✅ Retriever configurado")
     
-    def ingerir_documentos(self, documentos: List[WikipediaDocument]) -> int:
+    def ingerir_documentos(self, documentos: List[WikipediaDocument], colecao: str) -> int:
         """Ingere documentos usando pipeline LangChain completo"""
         if not self._initialized:
             raise Exception("Serviço não inicializado")
-        
+
         if not documentos:
             logger.warning("Nenhum documento fornecido para ingestão")
             return 0
-        
+
+        logger.info(f"📥 ################### ingerir_documentos # {len(documentos)} documentos na coleção '{colecao}' com LangChain")
         logger.info(f"📥 Iniciando ingestão de {len(documentos)} documentos com LangChain")
         start_time = time.time()
-        
+
+
+        # Detectar dimensão da coleção Qdrant
+        try:
+            col_info = self.qdrant_client.get_collection(colecao)
+            qdrant_dim = col_info.config.params.vectors.size
+            logger.info(f"🔎 Dimensão da coleção '{colecao}': {qdrant_dim}")
+        except Exception as e:
+            logger.warning(f"⚠️ Coleção '{colecao}' não existe, será criada.")
+            col_info = None
+            qdrant_dim = None
+
+        # Detectar dimensão do embedding
+        test_vec = self.embedding_model.encode("teste")
+        if hasattr(test_vec, 'tolist'):
+            emb_dim = len(test_vec.tolist())
+        else:
+            emb_dim = len(test_vec)
+        logger.info(f"🔎 Dimensão do embedding: {emb_dim}")
+
+        # Se coleção existe e dimensão está errada, remove e recria
+        if qdrant_dim is not None and emb_dim != qdrant_dim:
+            logger.warning(f"⚠️ Dimensão incompatível: coleção espera {qdrant_dim}, embedding gera {emb_dim}. Removendo e recriando coleção '{colecao}'...")
+            self.qdrant_client.delete_collection(collection_name=colecao)
+            self.criar_colecao_custom(colecao, emb_dim)
+            qdrant_dim = emb_dim
+
+        # Se coleção não existe, cria com dimensão correta
+        if qdrant_dim is None:
+            logger.info(f"📦 Criando coleção '{colecao}' com dimensão {emb_dim}")
+            self.criar_colecao_custom(colecao, emb_dim)
+            qdrant_dim = emb_dim
+
         try:
             total_chunks = 0
             points_batch = []
-            
+
             for doc in documentos:
                 # Criar documento LangChain
                 langchain_doc = Document(
@@ -389,27 +413,27 @@ class LangChainWikipediaService:
                         **doc.metadata
                     }
                 )
-                
+
                 # Dividir em chunks com LangChain TextSplitter
                 chunks = self.text_splitter.split_documents([langchain_doc])
-                
+
                 logger.info(f"📄 '{doc.title}': {len(chunks)} chunks criados")
-                
+
                 # Processar cada chunk
                 for i, chunk in enumerate(chunks):
                     # Gerar embedding
                     if self.embedding_model is None:
                         logger.error("❌ Modelo de embeddings não disponível")
                         raise RuntimeError("Embedding model não inicializado. Instale sentence-transformers.")
-                    
+
                     embedding_result = self.embedding_model.encode(chunk.page_content)
-                    
+
                     # Converter para lista se necessário
                     if hasattr(embedding_result, 'tolist'):
                         embedding = embedding_result.tolist()
                     else:
                         embedding = list(embedding_result)
-                    
+
                     # Criar ponto para Qdrant
                     point_id = str(uuid.uuid4())
                     point = PointStruct(
@@ -425,46 +449,46 @@ class LangChainWikipediaService:
                             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
                         }
                     )
-                    
+
                     points_batch.append(point)
                     total_chunks += 1
-                
+
                 # Processar em lotes de 100
                 if len(points_batch) >= 100:
-                    self._inserir_lote(points_batch)
+                    self._inserir_lote(points_batch, colecao)
                     points_batch = []
-            
+
             # Processar lote final
             if points_batch:
-                self._inserir_lote(points_batch)
-            
+                self._inserir_lote(points_batch, colecao)
+
             end_time = time.time()
             processing_time = end_time - start_time
-            
+
             logger.info(f"✅ Ingestão concluída:")
             logger.info(f"   📄 Documentos: {len(documentos)}")
             logger.info(f"   🔢 Chunks: {total_chunks}")
             logger.info(f"   ⏱️ Tempo: {processing_time:.2f}s")
             logger.info(f"   🚀 Velocidade: {total_chunks/processing_time:.2f} chunks/s")
-            
+
             return total_chunks
-            
+
         except Exception as e:
             logger.error(f"❌ Erro na ingestão: {e}")
             raise
     
-    def _inserir_lote(self, points: List[PointStruct]):
+    def _inserir_lote(self, points: List[PointStruct], colecao: str):
         """Insere lote de pontos no Qdrant"""
         try:
             # Verificar se collection existe, criar se necessário
             try:
-                self.qdrant_client.get_collection(self.collection_name)
+                self.qdrant_client.get_collection(colecao)
             except Exception:
-                logger.warning(f"⚠️ Collection '{self.collection_name}' não existe, criando...")
+                logger.warning(f"⚠️ Collection '{colecao}' não existe, criando...")
                 self._criar_colecao()
             
             self.qdrant_client.upsert(
-                collection_name=self.collection_name,
+                collection_name=colecao,
                 points=points
             )
             logger.debug(f"📦 Lote de {len(points)} pontos inserido")
@@ -473,7 +497,7 @@ class LangChainWikipediaService:
             logger.error(f"❌ Erro ao inserir lote: {e}")
             raise
     
-    def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.5) -> List[SearchResult]:
+    def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.5, colecao: str = None) -> List[SearchResult]:
         """Busca documentos usando LangChain retriever"""
         if not self._initialized:
             logger.error("❌ Serviço não inicializado - chamando inicializar()")
@@ -482,6 +506,10 @@ class LangChainWikipediaService:
             except Exception as e:
                 logger.error(f"❌ Falha ao inicializar: {e}")
                 return []
+            
+        self.collection_name = colecao if colecao is not None else self.collection_name    
+        logger.info("*******************************************************************")
+        logger.info(f"🔍 Buscando focumentos na coleção '{self.collection_name}': '{query}' (limit={limit}, threshold={score_threshold})")
         
         if self.embedding_model is None:
             logger.error("❌ Embedding model não inicializado")

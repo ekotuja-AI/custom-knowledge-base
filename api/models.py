@@ -32,7 +32,8 @@ class BuscarRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "query": "inteligência artificial e machine learning",
-                "limit": 10
+                "limit": 10,
+                "colecao": "minha-wiki"
             }
         }
     )
@@ -50,6 +51,11 @@ class BuscarRequest(BaseModel):
         ge=1,
         le=50,
         example=10
+    )
+    colecao: Optional[str] = Field(
+        default=None,
+        description="Nome da coleção Qdrant para filtrar a busca",
+        example="minha-wiki"
     )
 
 
@@ -70,6 +76,11 @@ class AdicionarArtigoRequest(BaseModel):
         max_length=200,
         example="Ciência de dados"
     )
+    colecao: str = Field(
+        default=None,
+        description="Nome da coleção Qdrant a ser usada para adicionar o artigo",
+        example="minha-wiki"
+    )
 
 
 class PerguntarRequest(BaseModel):
@@ -78,7 +89,8 @@ class PerguntarRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "pergunta": "O que é inteligência artificial e como funciona?",
-                "max_chunks": 10
+                "max_chunks": 10,
+                "colecao": "minha-wiki"
             }
         }
     )
@@ -96,6 +108,11 @@ class PerguntarRequest(BaseModel):
         ge=1,
         le=50,
         example=30
+    )
+    colecao: Optional[str] = Field(
+        default=None,
+        description="Nome da coleção Qdrant para filtrar a busca RAG",
+        example="minha-wiki"
     )
 
 
@@ -179,6 +196,38 @@ class RAGResponseModel(BaseModel):
     telemetria: Optional[dict] = Field(None, description="Telemetria detalhada do LLM (tokens, velocidade, etc)")
 
 
+class BuscaPreviaRequest(BaseModel):
+    """Modelo para requisição de busca prévia (antes de gerar resposta com LLM)"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "pergunta": "O que é Python?",
+                "max_chunks": 30,
+                "colecao": "minha-wiki"
+            }
+        }
+    )
+    pergunta: str = Field(
+        ...,
+        description="Pergunta original",
+        min_length=1,
+        max_length=500,
+        example="O que é Python?"
+    )
+    max_chunks: Optional[int] = Field(
+        default=30,
+        description="Número máximo de chunks de contexto para a resposta",
+        ge=1,
+        le=50,
+        example=30
+    )
+    colecao: Optional[str] = Field(
+        default=None,
+        description="Nome da coleção Qdrant para filtrar a busca prévia",
+        example="minha-wiki"
+    )
+
+
 class BuscaPreviaResponse(BaseModel):
     """Modelo para resposta de busca prévia (antes de gerar resposta com LLM)"""
     model_config = ConfigDict(
@@ -218,6 +267,7 @@ class AdicionarArtigoResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
+                "colecao": "minha-wiki",
                 "message": "Artigo adicionado com sucesso",
                 "titulo": "Ciência de dados",
                 "url": "https://pt.wikipedia.org/wiki/Ci%C3%AAncia_de_dados",
