@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Resumo das Coleções e Base</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        body { background: #f6f7fb; font-family: 'Segoe UI', Arial, sans-serif; }
+        .container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px #0001; padding: 32px; }
+        h1 { color: #4F6EF7; margin-bottom: 24px; }
+        .collection-card { background: #f3f6ff; border-radius: 10px; margin-bottom: 18px; padding: 18px 24px; box-shadow: 0 2px 8px #0001; }
+        .collection-title { font-size: 1.2em; font-weight: bold; color: #667eea; }
+        .stat-row { display: flex; gap: 32px; margin-top: 10px; }
+        .stat-label { color: #555; font-weight: 500; }
+        .stat-value { color: #222; font-weight: bold; }
+        .disk-info { background: #e9f7ef; border-radius: 8px; padding: 12px 18px; margin-bottom: 24px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Resumo das Coleções e Base</h1>
+        <div id="diskInfo" class="disk-info">Carregando espaço em disco...</div>
+        <div id="collectionsContainer">Carregando coleções...</div>
+    </div>
+    <script>
+    async function fetchDiskInfo() {
+        try {
+            const resp = await fetch('/dumps/status');
+            const data = await resp.json();
+            let html = `<b>Espaço em disco:</b> <br> Diretório: <code>${data.data_directory}</code><br> Total dumps: <b>${data.total_dumps}</b><br> Espaço usado: <b>${data.espaco_usado_mb} MB</b>`;
+            document.getElementById('diskInfo').innerHTML = html;
+        } catch (e) {
+            document.getElementById('diskInfo').innerHTML = 'Erro ao carregar espaço em disco.';
+        }
+    }
+    async function fetchCollectionsSummary() {
+        try {
+            const resp = await fetch('/listar_colecoes');
+            const data = await resp.json();
+            const colecoes = data.colecoes || [];
+            let html = '';
+            for (const col of colecoes) {
+                html += `<div class='collection-card'><div class='collection-title'>${col}</div><div class='stat-row' id='stat-${col}'><span>Carregando estatísticas...</span></div></div>`;
+            }
+            document.getElementById('collectionsContainer').innerHTML = html;
+            // Buscar estatísticas de cada coleção
+            for (const col of colecoes) {
+                try {
+                    const estatResp = await fetch(`/estatisticas?colecao=${encodeURIComponent(col)}`);
+                    const estat = await estatResp.json();
+                    let statHtml = `
+                        <div><span class='stat-label'>Artigos:</span> <span class='stat-value'>${estat.total_artigos ?? '-'}</span></div>
+                        <div><span class='stat-label'>Chunks:</span> <span class='stat-value'>${estat.total_chunks ?? '-'}</span></div>
+                        <div><span class='stat-label'>Dimensão Vetor:</span> <span class='stat-value'>${estat.dimensoes_vetor ?? '-'}</span></div>
+                        <div><span class='stat-label'>Distância:</span> <span class='stat-value'>${estat.distancia ?? '-'}</span></div>
+                        <div><span class='stat-label'>Modelo LLM:</span> <span class='stat-value'>${estat.modelo_llm ?? '-'}</span></div>
+                    `;
+                    document.getElementById(`stat-${col}`).innerHTML = statHtml;
+                } catch (e) {
+                    document.getElementById(`stat-${col}`).innerHTML = '<span>Erro ao carregar estatísticas.</span>';
+                }
+            }
+        } catch (e) {
+            document.getElementById('collectionsContainer').innerHTML = 'Erro ao carregar coleções.';
+        }
+    }
+    fetchDiskInfo();
+    fetchCollectionsSummary();
+    </script>
+</body>
+</html>

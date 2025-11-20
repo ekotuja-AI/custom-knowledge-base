@@ -1098,20 +1098,20 @@ class WikipediaOfflineService:
         except Exception as e:
             return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
     
-    def listar_todos_artigos(self) -> Dict[str, Any]:
-        """Lista todos os artigos únicos na base de conhecimento"""
+    def listar_todos_artigos(self, colecao=None) -> Dict[str, Any]:
+        """Lista todos os artigos únicos na base de conhecimento, filtrando por coleção se fornecida"""
         try:
             if not self.client:
                 logger.error("❌ Cliente Qdrant não inicializado")
                 return {"artigos": [], "total": 0}
-            
-            # Buscar todos os pontos da coleção LangChain
+
+            # Usar coleção fornecida ou padrão
+            collection_name = colecao if colecao else "wikipedia_langchain"
             all_points = []
             offset = None
-            
             while True:
                 result = self.client.scroll(
-                    collection_name="wikipedia_langchain",
+                    collection_name=collection_name,
                     limit=100,
                     offset=offset,
                     with_payload=True,

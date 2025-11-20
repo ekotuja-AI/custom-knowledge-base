@@ -313,11 +313,13 @@ async def obter_estatisticas(colecao: str = Query(None)):
         return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
 
 
+from fastapi import Query
+
 @app.get("/artigos")
-async def listar_artigos():
-    """Lista todos os artigos únicos na base de conhecimento"""
+async def listar_artigos(colecao: str = Query(None)):
+    """Lista todos os artigos únicos na base de conhecimento, filtrando por coleção se fornecida"""
     try:
-        return wikipedia_offline_service.listar_todos_artigos()
+        return wikipedia_offline_service.listar_todos_artigos(colecao)
     except Exception as e:
         logger.error(f"Erro ao listar artigos: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao listar artigos: {str(e)}")
@@ -501,7 +503,7 @@ async def perguntar_com_rag(request: PerguntarRequest):
 
         # Monta telemetria mesmo se não houver resposta
         telemetria = resposta_rag.telemetria if resposta_rag and resposta_rag.telemetria is not None else {}
-        telemetria["colecao_usada"] = getattr(request, 'colecao', None)
+        telemetria["colecao_usada"] = colecao
         telemetria["tempo_total_ms"] = round(tempo_processamento_ms, 2)
         telemetria["sucesso"] = bool(resposta_rag and resposta_rag.answer)
 
@@ -536,18 +538,21 @@ async def perguntar_com_rag(request: PerguntarRequest):
         )
 
 
+
 @app.post("/adicionar", response_model=AdicionarArtigoResponse)
 async def adicionar_artigo(request: AdicionarArtigoRequest):
-    """Adiciona artigo da Wikipedia à base local na coleção selecionada"""
+    """Adiciona artigo da Wikipedia à base local na coleção selecionada, com telemetria"""
+    import time
     try:
         colecao = getattr(request, 'colecao', None)
-
         logger.info(f"Adicionando artigo '{request.titulo}' à coleção '{colecao}'")
-
+        start_time = time.time()
         chunks_adicionados = wikipedia_offline_service.adicionar_artigo_wikipedia(
             request.titulo,
             colecao=colecao
         )
+        end_time = time.time()
+        tempo_processamento_ms = round((end_time - start_time) * 1000, 2)
         if chunks_adicionados == 0:
             raise HTTPException(    
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -555,13 +560,20 @@ async def adicionar_artigo(request: AdicionarArtigoRequest):
             )
         url_titulo = request.titulo.replace(" ", "_")
         url = f"https://pt.wikipedia.org/wiki/{url_titulo}"
-        return AdicionarArtigoResponse(
-            colecao = colecao,
-            message="Artigo adicionado com sucesso à base offline",
-            titulo=request.titulo,
-            url=url,
-            chunks_adicionados=chunks_adicionados
-        )
+        telemetria = {
+            "colecao": colecao,
+            "titulo": request.titulo,
+            "chunks_adicionados": chunks_adicionados,
+            "tempo_processamento_ms": tempo_processamento_ms
+        }
+        return {
+            "colecao": colecao,
+            "message": "Artigo adicionado com sucesso à base offline",
+            "titulo": request.titulo,
+            "url": url,
+            "chunks_adicionados": chunks_adicionados,
+            "telemetria": telemetria
+        }
     except HTTPException:
         raise
     except Exception as e:

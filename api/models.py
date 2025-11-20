@@ -280,6 +280,7 @@ class AdicionarArtigoResponse(BaseModel):
     titulo: str = Field(..., description="Título do artigo adicionado")
     url: str = Field(..., description="URL do artigo na Wikipedia")
     chunks_adicionados: int = Field(..., description="Número de chunks criados a partir do artigo")
+    telemetria: dict = Field(default_factory=dict, description="Telemetria detalhada da ingestão do artigo")
 
 
 class StatusResponse(BaseModel):

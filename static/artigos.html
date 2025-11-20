@@ -4,358 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📚 Base de Conhecimento - Artigos</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .header h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #667eea;
-            display: block;
-        }
-
-        .stat-label {
-            color: #666;
-            margin-top: 5px;
-            font-size: 0.9em;
-        }
-
-        .search-box {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .filters {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-
-        .filter-btn {
-            padding: 8px 16px;
-            border: 2px solid #667eea;
-            background: white;
-            color: #667eea;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: all 0.3s, transform 0.2s;
-            font-size: 0.9em;
-        }
-
-        .filter-btn:hover {
-            background: #667eea;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
-        }
-
-        .filter-btn.active {
-            background: #667eea;
-            color: white;
-        }
-
-        .articles-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        .article-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
-            cursor: pointer;
-        }
-
-        .article-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .article-title {
-            color: #667eea;
-            font-size: 1.3em;
-            font-weight: bold;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .article-preview {
-            color: #666;
-            font-size: 0.95em;
-            line-height: 1.6;
-            margin-bottom: 15px;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
-        .article-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.85em;
-            color: #999;
-            padding-top: 15px;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .article-chunks {
-            background: #f0f0f0;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 500;
-        }
-
-        .article-link {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .article-link:hover {
-            text-decoration: underline;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: white;
-            font-size: 1.2em;
-        }
-
-        .no-results {
-            text-align: center;
-            padding: 40px;
-            background: white;
-            border-radius: 10px;
-            color: #666;
-        }
-
-        .no-results-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.95em;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-        }
-
-        .btn-secondary {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-
-        .btn-secondary:hover {
-            background: #f8f9ff;
-        }
-
-        /* Paginação */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            margin: 30px 0;
-            padding: 20px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .pagination-btn {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .pagination-btn:hover:not(:disabled) {
-            background: #5568d3;
-            transform: translateY(-2px);
-        }
-
-        .pagination-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        .pagination-info {
-            font-size: 1.1em;
-            color: #333;
-            font-weight: 600;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .modal-title {
-            color: #667eea;
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 2em;
-            cursor: pointer;
-            color: #999;
-            line-height: 1;
-        }
-
-        .close-btn:hover {
-            color: #667eea;
-        }
-
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 1.8em;
-            }
-            
-            .articles-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/artigos.css">
 </head>
 <body>
+    <div style="width:100%;background:#4F6EF7;padding:10px 0;text-align:center;display:flex;justify-content:space-between;align-items:center;gap:16px;">
+        <span></span>
+        <div id="userInfo" style="font-size:1.1em;color:#fff;background:#667eea33;padding:8px 18px;border-radius:8px;display:inline-block;">
+            <span style="margin-left:18px;">Base:&nbsp;</span>
+            <select id="baseSelect" style="padding:4px 12px;border-radius:6px;font-size:1em;"></select>
+        </div>
+    </div>
     <div class="container">
+            <script>
+            // Carregar coleções no dropdown
+            async function carregarBasesEArtigos() {
+                const select = document.getElementById('baseSelect');
+                select.innerHTML = '';
+                try {
+                    const resp = await fetch('/listar_colecoes');
+                    const data = await resp.json();
+                    data.colecoes.forEach(base => {
+                        const opt = document.createElement('option');
+                        opt.value = base;
+                        opt.textContent = base;
+                        select.appendChild(opt);
+                    });
+                    // Selecionar vigente do localStorage se existir, senão primeira opção
+                    const vigente = localStorage.getItem('colecaoVigente');
+                    if (vigente && data.colecoes.includes(vigente)) {
+                        select.value = vigente;
+                    } else if (data.colecoes.length > 0) {
+                        select.value = data.colecoes[0];
+                        localStorage.setItem('colecaoVigente', data.colecoes[0]);
+                    }
+                    // Sincroniza localStorage com valor do dropdown SEMPRE
+                    localStorage.setItem('colecaoVigente', select.value);
+                } catch (e) {
+                    select.innerHTML = '<option>Erro ao carregar bases</option>';
+                }
+                // Sempre carregar artigos após popular dropdown
+                carregarMetadados();
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                carregarBasesEArtigos();
+                document.getElementById('baseSelect').addEventListener('change', function() {
+                    localStorage.setItem('colecaoVigente', this.value);
+                    carregarMetadados();
+                });
+            });
+            </script>
         <div class="header">
             <h1>📚 Base de Conhecimento</h1>
-            <p>Explore e busque artigos da Wikipedia na base vetorial</p>
+            <p>Explore artigos na base vetorial</p>
             <div class="action-buttons">
                 <button class="btn btn-primary" onclick="window.location.href='/'">🏠 Voltar</button>
                 <button class="btn btn-secondary" onclick="carregarArtigos()">🔄 Atualizar</button>
@@ -455,7 +156,10 @@
             loading.innerHTML = '<div>⏳ Carregando base de conhecimento...</div>';
 
             try {
-                const response = await fetch(`${API_BASE}/artigos`);
+                const select = document.getElementById('baseSelect');
+                if (!select || !select.value) return;
+                const colecao = select.value;
+                const response = await fetch(`${API_BASE}/artigos?colecao=${encodeURIComponent(colecao)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -488,7 +192,8 @@
             noResults.style.display = 'none';
 
             try {
-                const response = await fetch(`${API_BASE}/artigos`);
+                const colecao = document.getElementById('baseSelect')?.value || localStorage.getItem('colecaoVigente') || '';
+                const response = await fetch(`${API_BASE}/artigos?colecao=${encodeURIComponent(colecao)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }

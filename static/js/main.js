@@ -47,8 +47,18 @@ async function loadStats() {
         const colecao = dropdown && dropdown.value ? dropdown.value : '';
         const statsResp = await fetch(`/estatisticas${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
         const stats = await statsResp.json();
-        document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
-        document.getElementById('totalArtigos').textContent = stats.total_artigos ? stats.total_artigos : '0';
+            document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
+            document.getElementById('totalArtigos').textContent = stats.total_artigos ? stats.total_artigos : '0';
+            // Atualiza o card de coleção
+            const colecaoCard = document.getElementById('colecaoCard');
+            if (colecaoCard) {
+                colecaoCard.textContent = `Coleção selecionada: ${stats.colecao ? stats.colecao : '-'}`;
+            }
+            // Atualiza dimensão do vetor
+            const vectorDimSpan = document.getElementById('vectorDim');
+            if (vectorDimSpan) {
+                vectorDimSpan.textContent = stats.dimensoes_vetor !== undefined ? stats.dimensoes_vetor : '-';
+            }
         const statusResp = await fetch(`/status${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
         const status = await statusResp.json();
         document.getElementById('qdrantStatus').textContent = status.qdrant_conectado ? 'Conectado' : 'Desconectado';
@@ -64,6 +74,8 @@ async function loadStats() {
         document.getElementById('modeloEmbedding').textContent = 'Erro';
         document.getElementById('ollamaStatus').textContent = 'Erro';
         document.getElementById('modeloLLM').textContent = '';
+        const colecaoCard = document.getElementById('colecaoCard');
+        if (colecaoCard) colecaoCard.textContent = 'Coleção: Erro';
     }
 }
 window.loadStats = loadStats;
@@ -205,8 +217,21 @@ async function addArticle() {
             body: JSON.stringify({ titulo: title, colecao })
         });
         const data = await response.json();
+            // Exibe o JSON bruto da resposta para debug
+            resultsDiv.innerHTML = `<pre style='background:#f9f9f9;border-radius:8px;padding:10px;margin-top:10px;'>${JSON.stringify(data, null, 2)}</pre>`;
         if (data.chunks_adicionados) {
-            resultsDiv.innerHTML = `<div class="success">Chunks criados: ${data.chunks_adicionados}<br><a href="${data.url}" target="_blank" style="color: #4CAF50;">${data.titulo || 'Ver artigo'}</a></div>`;
+            let telemetriaHtml = '';
+            if (data.telemetria) {
+                telemetriaHtml = `
+                <div class="telemetria-panel" style="margin-top:10px;padding:10px;background:#f3f3f3;border-radius:8px;">
+                    <b>Telemetria da Ingestão:</b><br>
+                    <span><b>Coleção:</b> ${data.telemetria.colecao}</span><br>
+                    <span><b>Título:</b> ${data.telemetria.titulo}</span><br>
+                    <span><b>Chunks adicionados:</b> ${data.telemetria.chunks_adicionados}</span><br>
+                    <span><b>Tempo de processamento:</b> ${data.telemetria.tempo_processamento_ms} ms</span>
+                </div>`;
+            }
+            resultsDiv.innerHTML = `<div class="success">Chunks criados: ${data.chunks_adicionados}<br><a href="${data.url}" target="_blank" style="color: #4CAF50;">${data.titulo || 'Ver artigo'}</a></div>${telemetriaHtml}`;
             loadStats();
         } else {
             resultsDiv.innerHTML = `<div class="error">Erro: ${data.detail || data.message || 'Falha ao adicionar artigo'}</div>`;
@@ -271,20 +296,30 @@ async function loadQdrantCollections() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadQdrantCollections();
-    const dropdown = document.getElementById('qdrant-collections-dropdown');
-    const openBtn = document.getElementById('open-collection-session');
-    dropdown.addEventListener('change', function() {
-        if (openBtn) openBtn.disabled = !dropdown.value;
-        // Atualiza os cards Qdrant, Embedding Model e Ollama LLM ao mudar a coleção
-        loadStats();
-    });
-    if (openBtn) {
-        openBtn.addEventListener('click', function() {
-            if (dropdown.value) {
-                // Open index.html in a new tab, optionally with query param for collection
-                window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
+    loadQdrantCollections().then(() => {
+        const dropdown = document.getElementById('qdrant-collections-dropdown');
+        const vigente = localStorage.getItem('colecaoVigente');
+        if (dropdown && vigente) {
+            // Se a coleção vigente existe nas opções, seleciona
+            for (let i = 0; i < dropdown.options.length; i++) {
+                if (dropdown.options[i].value === vigente) {
+                    dropdown.selectedIndex = i;
+                    break;
+                }
             }
+        }
+        loadStats();
+        dropdown.addEventListener('change', function() {
+            localStorage.setItem('colecaoVigente', dropdown.value);
+            loadStats();
         });
-    }
+        const openBtn = document.getElementById('open-collection-session');
+        if (openBtn) {
+            openBtn.addEventListener('click', function() {
+                if (dropdown.value) {
+                    window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
+                }
+            });
+        }
+    });
 });

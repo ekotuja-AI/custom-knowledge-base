@@ -8,10 +8,6 @@
 <body>
     <div style="width:100%;background:#4F6EF7;padding:10px 0;display:flex;justify-content:space-between;align-items:center;">
         <a href="/static/landing.html" class="top-btn">Ir para Landing Page</a>
-        <div id="qdrant-collections-top" style="margin-right:32px;">
-            <label for="qdrant-collections-dropdown" style="color:#fff;font-weight:bold;margin-right:8px;">Coleções Qdrant:</label>
-            <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:220px;"></select>
-        </div>
     </div>
     <style>
     .top-btn {
@@ -65,9 +61,15 @@
         <!-- painel de telemetria removido -->
             <div class="stat-card">
                 <div class="stat-value">Qdrant</div>
-                <div class="stat-label"><b>Status:</b> <span id="qdrantStatus">...</span></div>
-                <div class="stat-label"><b>Artigos na Base:</b> <span id="totalArtigos">...</span></div>
-                <div class="stat-label"><b>Chunks na Base:</b> <span id="totalChunks">...</span></div>
+                <div style="margin-bottom:8px;">
+                    <label for="qdrant-collections-dropdown" style="color:#4F6EF7;font-weight:bold;margin-right:8px;">Coleção Qdrant:</label>
+                    <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:180px;"></select>
+                </div>
+                    <div id="colecaoCard" class="stat-label" style="margin-bottom:8px;background:#e9e9e9;border-radius:6px;padding:6px 12px;font-weight:bold;color:#4F6EF7;">Coleção selecionada: ...</div>
+                    <div class="stat-label"><b>Status:</b> <span id="qdrantStatus">...</span></div>
+                    <div class="stat-label"><b>Dimensão do vetor:</b> <span id="vectorDim">...</span></div>
+                    <div class="stat-label"><b>Artigos na Base:</b> <span id="totalArtigos">...</span></div>
+                    <div class="stat-label"><b>Chunks na Base:</b> <span id="totalChunks">...</span></div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="embeddingname">Embedding Model</div>
@@ -86,10 +88,19 @@
 
         <!-- Botão para ver artigos -->
         <div style="text-align: center; margin-bottom: 30px;">
-            <button onclick="window.location.href='/artigos.html'" style="padding: 15px 30px; font-size: 1.1em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;">
+            <button id="verArtigosBtn" style="padding: 15px 30px; font-size: 1.1em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;">
                 📚 Ver Todos os Artigos
             </button>
         </div>
+        <script>
+        document.getElementById('verArtigosBtn').addEventListener('click', function() {
+            var select = document.getElementById('qdrant-collections-dropdown');
+            if (select && select.value) {
+                localStorage.setItem('colecaoVigente', select.value);
+            }
+            window.location.href = '/artigos.html';
+        });
+        </script>
 
         <div class="main-content">
             <!-- Painel de Perguntas -->

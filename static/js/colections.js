@@ -19,4 +19,25 @@ document.addEventListener('DOMContentLoaded', async function() {
     } catch (e) {
         document.getElementById('colecoesMsg').textContent = 'Erro ao consultar coleções.';
     }
+
+    dropdown.addEventListener('change', async function() {
+        const colecao = dropdown.value;
+        const infoDiv = document.getElementById('dimensaoVetorInfo');
+        if (!colecao) {
+            infoDiv.textContent = '';
+            return;
+        }
+        infoDiv.textContent = 'Carregando dimensão do vetor...';
+        try {
+            const resp = await fetch(`/estatisticas?colecao=${encodeURIComponent(colecao)}`);
+            const stats = await resp.json();
+            if (stats.dimensoes_vetor !== undefined) {
+                infoDiv.textContent = `Dimensão do vetor: ${stats.dimensoes_vetor}`;
+            } else {
+                infoDiv.textContent = 'Dimensão do vetor não encontrada.';
+            }
+        } catch (e) {
+            infoDiv.textContent = 'Erro ao consultar dimensão.';
+        }
+    });
 });
