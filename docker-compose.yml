@@ -50,6 +50,7 @@ services:
     volumes:
       - .:/app
       - ./data:/app/data  # Para dumps XML e cache
+      - ./models/hf_cache:/root/.cache/huggingface
     working_dir: /app
     command: uvicorn api.wikipediaFuncionalAPI:app --host 0.0.0.0 --port 9000 --reload
     environment:
@@ -68,11 +69,28 @@ services:
       - offline_wikipedia_network
     restart: unless-stopped
 
+  # Banco de dados MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_kb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: customkb
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - offline_wikipedia_network
+
 volumes:
   qdrant_storage:
     external: true
     name: dicionario_vetorial_qdrant_storage
   ollama_models:
+  mysql_data:
 
 networks:
   offline_wikipedia_network:

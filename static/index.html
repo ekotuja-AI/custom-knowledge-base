@@ -13,27 +13,7 @@
             <select id="qdrant-collections-dropdown" style="padding:6px 12px;border-radius:6px;font-size:1em;min-width:220px;"></select>
         </div>
     </div>
-    <style>
-    .top-btn {
-        display: inline-block;
-        background: #fff;
-        color: #4F6EF7;
-        font-weight: bold;
-        font-size: 1.05em;
-        text-decoration: none;
-        border-radius: 6px;
-        padding: 8px 18px;
-        margin: 0 2px;
-        box-shadow: 0 1px 6px #0001;
-        transition: background 0.2s, color 0.2s;
-    }
-    .top-btn:hover {
-        background: #4F6EF7;
-        color: #fff;
-    }
-    </style>
     <title>Wikipedia Offline RAG - Interface Web</title>
-    
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
@@ -66,6 +46,7 @@
             <div class="stat-card">
                 <div class="stat-value">Qdrant</div>
                 <div class="stat-label"><b>Status:</b> <span id="qdrantStatus">...</span></div>
+                <div class="stat-label"><b>Coleção:</b> <span id="colecaoNome">...</span></div>
                 <div class="stat-label"><b>Artigos na Base:</b> <span id="totalArtigos">...</span></div>
                 <div class="stat-label"><b>Chunks na Base:</b> <span id="totalChunks">...</span></div>
             </div>
@@ -73,6 +54,7 @@
                 <div class="stat-value" id="embeddingname">Embedding Model</div>
                 <div class="stat-label"><b>Status:</b> <span id="embeddingStatus">...</span></div>
                 <div class="stat-label"><b>Modelo:</b> <span id="modeloEmbedding"></span></div>
+                <div class="stat-label"><b>Dimensões:</b> <span id="embeddingDimensoes"></span></div>
             </div>
             <div class="stat-card">
                 <div class="stat-value ">Ollama LLM</div>
@@ -86,9 +68,28 @@
 
         <!-- Botão para ver artigos -->
         <div style="text-align: center; margin-bottom: 30px;">
-            <button onclick="window.location.href='/artigos.html'" style="padding: 15px 30px; font-size: 1.1em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;">
+            <button id="btnVerArtigos" style="padding: 15px 30px; font-size: 1.1em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;">
                 📚 Ver Todos os Artigos
             </button>
+            <script>
+            // Salva coleção selecionada ao navegar para artigos.html
+            document.getElementById('btnVerArtigos').addEventListener('click', function(e) {
+                var dropdown = document.getElementById('qdrant-collections-dropdown');
+                if (dropdown && dropdown.value) {
+                    localStorage.setItem('qdrant_selected_collection', dropdown.value);
+                }
+                // Navega para artigos.html mantendo contexto
+                window.location.href = '/artigos.html';
+            });
+            // Ao carregar, restaura seleção do localStorage
+            document.addEventListener('DOMContentLoaded', function() {
+                var dropdown = document.getElementById('qdrant-collections-dropdown');
+                var selected = localStorage.getItem('qdrant_selected_collection') || '';
+                if (dropdown && selected) {
+                    dropdown.value = selected;
+                }
+            });
+            </script>
         </div>
 
         <div class="main-content">
@@ -145,10 +146,48 @@
             </div>
             <div id="addResults"></div>
         </div>
-
-        
     </div>
 
-    <script src="/static/js/main.js"></script>
+    
+
+<script type="module">
+    import {
+    loadQdrantCollections,
+    loadStats,
+    performSearch,
+    askQuestion,
+    addArticle,
+    addRandomArticle,
+    iniciarWebSocketProgresso,
+    iniciarWebSocketTelemetria
+    } from '/static/js/main.js';
+
+    // Torna as funções acessíveis globalmente para uso em onclick
+    window.performSearch = performSearch;
+    window.askQuestion = askQuestion;
+    window.addArticle = addArticle;
+    window.addRandomArticle = addRandomArticle;
+    window.iniciarWebSocketProgresso = iniciarWebSocketProgresso;
+    window.iniciarWebSocketTelemetria = iniciarWebSocketTelemetria;
+
+    // Carrega coleções e estatísticas ao iniciar
+    const dropdown = document.getElementById('qdrant-collections-dropdown');
+    const savedCollection = localStorage.getItem('selectedCollection');
+    loadQdrantCollections(dropdown, savedCollection).then(() => {
+        loadStats();
+        dropdown.addEventListener('change', function() {
+            localStorage.setItem('selectedCollection', dropdown.value);
+            loadStats();
+        });
+    });
+
+    document.getElementById('searchQuery').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') performSearch();
+    });
+    document.getElementById('question').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) askQuestion();
+    });
+
+</script>
 </body>
 </html>

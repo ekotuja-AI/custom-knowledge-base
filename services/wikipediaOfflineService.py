@@ -1098,32 +1098,28 @@ class WikipediaOfflineService:
         except Exception as e:
             return {"erro": f"Erro ao obter estatísticas: {str(e)}"}
     
-    def listar_todos_artigos(self) -> Dict[str, Any]:
-        """Lista todos os artigos únicos na base de conhecimento"""
+    def listar_todos_artigos(self, colecao=None) -> Dict[str, Any]:
+        """Lista todos os artigos únicos na base de conhecimento, filtrando por coleção se informado"""
         try:
             if not self.client:
                 logger.error("❌ Cliente Qdrant não inicializado")
                 return {"artigos": [], "total": 0}
-            
-            # Buscar todos os pontos da coleção LangChain
+            # Usar coleção informada ou padrão
+            collection_name = colecao if colecao else "wikipedia_langchain"
             all_points = []
             offset = None
-            
             while True:
                 result = self.client.scroll(
-                    collection_name="wikipedia_langchain",
+                    collection_name=collection_name,
                     limit=100,
                     offset=offset,
                     with_payload=True,
                     with_vectors=False
                 )
-                
                 points, offset = result
                 all_points.extend(points)
-                
                 if offset is None:
                     break
-            
             # Agrupar por título e pegar informações únicas
             artigos_dict = {}
             for point in all_points:
@@ -1137,18 +1133,15 @@ class WikipediaOfflineService:
                         'preview': point.payload.get('content', '')[:200]
                     }
                 artigos_dict[title]['chunks'] += 1
-            
             # Converter para lista e ordenar por título
             artigos_list = sorted(artigos_dict.values(), key=lambda x: x['title'].lower())
-            
-            logger.info(f"📚 Encontrados {len(artigos_list)} artigos únicos ({len(all_points)} chunks total)")
-            
+            logger.info(f"📚 Encontrados {len(artigos_list)} artigos únicos ({len(all_points)} chunks total) na coleção {collection_name}")
             return {
                 "artigos": artigos_list,
                 "total": len(artigos_list),
-                "total_chunks": len(all_points)
+                "total_chunks": len(all_points),
+                "colecao": collection_name
             }
-            
         except Exception as e:
             logger.error(f"❌ Erro ao listar artigos: {e}")
             return {"artigos": [], "total": 0, "erro": str(e)}
@@ -1220,8 +1213,46 @@ class WikipediaOfflineService:
             logger.error(f"❌ Erro ao processar lote: {e}")
             return 0
     
+    def _get_embedding_dimensions(self, collection_name=None):
+        logger.debug(f"#############   _get_embedding_dimensions chamada: {collection_name}")
+        # Se collection_name for informado, buscar modelo do banco
+        if collection_name:
+            try:
+                from services.dbService import get_connection
+                conn = get_connection()
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT embedding_model_id FROM knowledge_bases WHERE qdrant_collection = %s", (collection_name,))
+                row = cursor.fetchone()
+                if row and row["embedding_model_id"]:
+                    cursor.execute("SELECT dimensao FROM embedding_models WHERE id = %s", (row["embedding_model_id"],))
+                    dim_row = cursor.fetchone()
+                    if dim_row and dim_row["dimensao"]:
+                        cursor.close()
+                        conn.close()
+                        return int(dim_row["dimensao"])
+                cursor.close()
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Erro ao buscar dimensão do modelo de embedding no banco: {e}")
+        # Se você tiver o objeto do modelo carregado:   
+        if hasattr(self, "embedding_model") and self.embedding_model is not None:
+            try:
+                return self.embedding_model.get_sentence_embedding_dimension()
+            except:
+                pass
+        # Fallback baseado no nome
+        if self.embedding_model_name == "paraphrase-multilingual-MiniLM-L12-v2":
+            return 384
+        if self.embedding_model_name == "bge-m3":
+            return 1024
+        return None
+
+
     def verificar_status(self, colecao=None) -> Dict[str, Any]:
         """Status completo do sistema, opcionalmente para uma coleção específica"""
+
+        logger.debug(f"%%%%%%   verificar_status /status chamada com coleção: {colecao}")
+
         # Verifica número de coleções no Qdrant
         colecoes_count = 0
         colecoes_lista = []
@@ -1248,6 +1279,8 @@ class WikipediaOfflineService:
         except Exception:
             ollama_disponivel = False
 
+
+        dimensoes = self._get_embedding_dimensions(collection_name)
         # Se quiser retornar status da coleção específica, pode customizar aqui
         return {
             "status": "ok" if self._initialized else "error",
@@ -1256,7 +1289,8 @@ class WikipediaOfflineService:
             "colecoes": colecoes_count,
             "colecoes_lista": colecoes_lista,
             "modelo_embedding_carregado": True,  # ajuste conforme lógica real
-            "modelo_embedding_nome": self.embedding_model_name,
+            "modelo_embedding_nome": collection_name,
+            "modelo_embedding_dimensoes": dimensoes,
             "text_splitter_configurado": True,    # ajuste conforme lógica real
             "openai_configurado": False,
             "inicializado": self._initialized,

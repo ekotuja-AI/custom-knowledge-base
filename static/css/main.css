@@ -11,6 +11,24 @@ body {
     padding: 20px;
 }
 
+.top-btn {
+        display: inline-block;
+        background: #fff;
+        color: #4F6EF7;
+        font-weight: bold;
+        font-size: 1.05em;
+        text-decoration: none;
+        border-radius: 6px;
+        padding: 8px 18px;
+        margin: 0 2px;
+        box-shadow: 0 1px 6px #0001;
+        transition: background 0.2s, color 0.2s;
+    }
+.top-btn:hover {
+    background: #4F6EF7;
+    color: #fff;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;

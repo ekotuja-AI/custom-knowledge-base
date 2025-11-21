@@ -1,0 +1,24 @@
+{
+  "embeddings": [
+    {
+      "id": "bge-m3",
+      "name": "bge-m3",
+      "desc": "Embedding multilíngue, 1024 dimensões (BAAI/BGE-M3)"
+    },
+    {
+      "id": "paraphrase-multilingual-MiniLM-L12-v2",
+      "name": "paraphrase-multilingual-MiniLM-L12-v2",
+      "desc": "Embedding multilíngue, 384 dimensões (Sentence-Transformers MiniLM)"
+    }
+  ],
+  "llms": [
+    { "id": "qwen2.5:7b", "name": "qwen2.5:7b", "desc": "LLM Multilingual" },
+    { "id": "phi-3-mini", "name": "phi-3-mini", "desc": "LLM em inglês" },
+    { "id": "llama3:8b", "name": "llama3:8b", "desc": "LLM Multilingual" },
+    { "id": "gemma:2b", "name": "gemma:2b", "desc": "LLM Multilingual" },
+    { "id": "mpt-7b-instruct", "name": "mpt-7b-instruct", "desc": "LLM em inglês" },
+    { "id": "falcon-7b", "name": "falcon-7b", "desc": "LLM em inglês" },
+    { "id": "mistral-7b", "name": "mistral-7b", "desc": "LLM Multilingual" },
+    { "id": "openchat-3.5", "name": "openchat-3.5", "desc": "LLM em inglês" }
+  ]
+}

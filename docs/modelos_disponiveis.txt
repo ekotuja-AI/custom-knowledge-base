@@ -1,0 +1,23 @@
+# Modelos de Embeddings Disponíveis
+
+- bge-large-pt: Embedding em português, 1024 dimensões
+- bge-base-pt: Embedding em português, 768 dimensões
+- bge-large-en: Embedding em inglês, 1024 dimensões
+- bge-base-en: Embedding em inglês, 768 dimensões
+- multi-qa-MiniLM-L6-cos-v1: Embedding multilíngue, 384 dimensões
+- paraphrase-multilingual-MiniLM-L12-v2: Embedding multilíngue, 384 dimensões
+- all-MiniLM-L6-v2: Embedding multilíngue, 384 dimensões
+
+# Modelos de LLM Disponíveis
+
+- qwen2.5:7b: LLM Multilingual
+- phi-3-mini: LLM em inglês
+- llama3:8b: LLM Multilingual
+- gemma:2b: LLM Multilingual
+- mpt-7b-instruct: LLM em inglês
+- falcon-7b: LLM em inglês
+- mistral-7b: LLM Multilingual
+- openchat-3.5: LLM em inglês
+
+# Observação
+Consulte a documentação do projeto para detalhes de instalação e uso de cada modelo. Escolha o modelo conforme o idioma e o tamanho desejado para sua coleção.

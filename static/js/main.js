@@ -1,5 +1,5 @@
 let ws;
-function iniciarWebSocketProgresso() {
+export function iniciarWebSocketProgresso() {
     const progressoDiv = document.getElementById('progressoPergunta');
     progressoDiv.innerHTML = '';
     ws = new WebSocket('ws://' + window.location.host + '/ws/progresso-pergunta');
@@ -17,7 +17,7 @@ function iniciarWebSocketProgresso() {
     };
 }
 
-function iniciarWebSocketTelemetria() {
+export function iniciarWebSocketTelemetria() {
     const telemetriaDiv = document.getElementById('telemetriaStatus');
     telemetriaDiv.innerHTML = '';
     // Fecha o WebSocket anterior se existir
@@ -41,35 +41,46 @@ function iniciarWebSocketTelemetria() {
     };
 }
 
-async function loadStats() {
+export async function loadStats() {
     try {
         const dropdown = document.getElementById('qdrant-collections-dropdown');
-        const colecao = dropdown && dropdown.value ? dropdown.value : '';
-        const statsResp = await fetch(`/estatisticas${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
+        const colecaoNome = dropdown && dropdown.value ? dropdown.value : '';
+        const statsUrl = `/estatisticas${colecaoNome ? `?colecao=${encodeURIComponent(colecaoNome)}` : ''}`;
+        const statusUrl = `/status${colecaoNome ? `?colecao=${encodeURIComponent(colecaoNome)}` : ''}`;
+        
+        const statsResp = await fetch(statsUrl);
         const stats = await statsResp.json();
         document.getElementById('totalChunks').textContent = stats.total_chunks ? stats.total_chunks : '0';
         document.getElementById('totalArtigos').textContent = stats.total_artigos ? stats.total_artigos : '0';
-        const statusResp = await fetch(`/status${colecao ? `?colecao=${encodeURIComponent(colecao)}` : ''}`);
+        document.getElementById('colecaoNome').textContent = stats.colecao ? stats.colecao : (colecao || '...');
+        
+        const statusResp = await fetch(statusUrl);
         const status = await statusResp.json();
         document.getElementById('qdrantStatus').textContent = status.qdrant_conectado ? 'Conectado' : 'Desconectado';
         document.getElementById('embeddingStatus').textContent = status.modelo_embedding_carregado ? 'Carregado'  : 'Indisponível';
-        document.getElementById('modeloEmbedding').textContent = status.modelo_embedding_nome ? '(' + status.modelo_embedding_nome + ')' : 'Não informado';
+        document.getElementById('modeloEmbedding').textContent = status.modelo_embedding_nome ?  status.modelo_embedding_nome : 'Não informado';
+        document.getElementById('embeddingDimensoes').textContent = status.modelo_embedding_dimensoes ? status.modelo_embedding_dimensoes : 'N/A';
         const modelo_llm = status.modelo_llm ? status.modelo_llm : 'N/A';
         document.getElementById('ollamaStatus').textContent = status.ollama_disponivel ? 'Disponível' : 'Indisponível';
         document.getElementById('modeloLLM').textContent = '(' + modelo_llm + ')';
+        if (!stats.colecao && status.colecao) {
+            document.getElementById('colecaoNome').textContent = status.colecao;
+        }
     } catch (error) {
+        console.error("[loadStats] Erro ao carregar stats:", error);
         document.getElementById('totalChunks').textContent = 'Erro';
         document.getElementById('qdrantStatus').textContent = 'Erro';
         document.getElementById('embeddingStatus').textContent = 'Erro';
         document.getElementById('modeloEmbedding').textContent = 'Erro';
+        document.getElementById('embeddingDimensoes').textContent = 'Erro';
         document.getElementById('ollamaStatus').textContent = 'Erro';
         document.getElementById('modeloLLM').textContent = '';
     }
 }
-window.loadStats = loadStats;
-window.addEventListener('DOMContentLoaded', loadStats);
+//window.loadStats = loadStats;
+// Removido: atribuição ao window e eventListener global
 
-async function performSearch() {
+export async function performSearch() {
     const query = document.getElementById('searchQuery').value;
     const limit = parseInt(document.getElementById('searchLimit').value) || 5;
     const resultsDiv = document.getElementById('searchResults');
@@ -124,7 +135,7 @@ async function performSearch() {
     }
 }
 
-async function askQuestion() {
+export async function askQuestion() {
     const question = document.getElementById('question').value;
     const maxChunks = parseInt(document.getElementById('maxChunks').value) || 10;
     const resultsDiv = document.getElementById('answerResults');
@@ -192,7 +203,7 @@ async function askQuestion() {
     }
 }
 
-async function addArticle() {
+export async function addArticle() {
     const title = document.getElementById('articleTitle').value;
     const resultsDiv = document.getElementById('addResults');
     resultsDiv.innerHTML = '<div class="loading">Adicionando artigo...</div>';
@@ -216,7 +227,7 @@ async function addArticle() {
     }
 }
 
-async function addRandomArticle() {
+export async function addRandomArticle() {
     const resultsDiv = document.getElementById('addResults');
     resultsDiv.innerHTML = '<div class="loading">Adicionando artigo aleatório...</div>';
     try {
@@ -233,58 +244,42 @@ async function addRandomArticle() {
     }
 }
 
-document.getElementById('searchQuery').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch();
-});
-document.getElementById('question').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && e.ctrlKey) askQuestion();
-});
 
-window.askQuestion = askQuestion;
-window.performSearch = performSearch;
-window.addArticle = addArticle;
-window.addRandomArticle = addRandomArticle;
+//window.askQuestion = askQuestion;
+// Removido: atribuição ao window
 
 // --- Qdrant Collections Dropdown Logic ---
-async function loadQdrantCollections() {
+export async function loadQdrantCollections(dropdown, selectedCollection = null) {
     try {
         const resp = await fetch('/listar_colecoes');
         const data = await resp.json();
+        // Espera que o backend retorne colecoes como [{id, nome, qdrant_collection}]
         const collections = data.colecoes || [];
-        const dropdown = document.getElementById('qdrant-collections-dropdown');
         dropdown.innerHTML = '<option value="">Selecione uma coleção</option>';
         let defaultSet = false;
         collections.forEach(col => {
             const opt = document.createElement('option');
-            opt.value = col;
-            opt.textContent = col;
-            if (col === 'wikipedia_langchain' && !defaultSet) {
+            if (typeof col === 'object' && col.qdrant_collection) {
+                opt.value = col.qdrant_collection;
+                opt.textContent = col.qdrant_collection;
+            } else {
+                opt.value = col;
+                opt.textContent = col;
+            }
+            if ((col.qdrant_collection === 'wikipedia_langchain' || col === 'wikipedia_langchain') && !defaultSet) {
                 opt.selected = true;
                 defaultSet = true;
             }
             dropdown.appendChild(opt);
         });
+        // Restaura valor salvo se fornecido
+        if (selectedCollection && dropdown) {
+            dropdown.value = selectedCollection;
+        }
     } catch (err) {
-        const dropdown = document.getElementById('qdrant-collections-dropdown');
         dropdown.innerHTML = '<option value="">Erro ao carregar coleções</option>';
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadQdrantCollections();
-    const dropdown = document.getElementById('qdrant-collections-dropdown');
-    const openBtn = document.getElementById('open-collection-session');
-    dropdown.addEventListener('change', function() {
-        if (openBtn) openBtn.disabled = !dropdown.value;
-        // Atualiza os cards Qdrant, Embedding Model e Ollama LLM ao mudar a coleção
-        loadStats();
-    });
-    if (openBtn) {
-        openBtn.addEventListener('click', function() {
-            if (dropdown.value) {
-                // Open index.html in a new tab, optionally with query param for collection
-                window.open(`/static/index.html?colecao=${encodeURIComponent(dropdown.value)}`, '_blank');
-            }
-        });
-    }
-});
+// Removido: eventListener global. Use import e inicialização via módulo nas páginas.
+//export { performSearch, askQuestion, addArticle, addRandomArticle };

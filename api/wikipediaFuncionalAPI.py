@@ -1,7 +1,35 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi import status, BackgroundTasks, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-# Definir o app ANTES de qualquer rota
+import time
+from contextlib import asynccontextmanager
+from typing import List
+from typing import Optional
+from pathlib import Path
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+from services.dbService import listar_bases, buscar_dimensao_embedding, get_connection, get_or_create_user
+from services.wikipediaOfflineService import wikipedia_offline_service
+from services.wikipediaDumpService import wikipedia_dump_processor
+from api.models import (
+    StatusResponse,
+    BuscarResponse,
+    BuscaPreviaResponse,
+    RAGResponseModel,
+    AdicionarArtigoResponse,
+    WikipediaResultModel,
+    PerguntarRequest,
+    BuscarRequest,
+    AdicionarArtigoRequest
+)
 app = FastAPI()
 
 
@@ -21,14 +49,8 @@ async def serve_criar_colecao():
     static_path = os.path.join(base_dir, "..", "static", "criar_colecao.html")
     return FileResponse(static_path)
 
-import logging
 
-# Configurar logging com nivel DEBUG para ver todos os logs
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
 
 """
 API Wikipedia Offline - Versão Funcional
@@ -36,51 +58,25 @@ API Wikipedia Offline - Versão Funcional
 API que integra Qdrant + Ollama + Wikipedia de forma funcional.
 """
 
-import time
-from contextlib import asynccontextmanager
-from typing import List
-from typing import Optional
-from pathlib import Path
-
-from fastapi import FastAPI, HTTPException, status, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from services.wikipediaOfflineService import wikipedia_offline_service
-from services.wikipediaDumpService import wikipedia_dump_processor
-# Modelos Pydantic importados do utilitário
-from .models import (
-    BuscarRequest,
-    WikipediaResultModel,
-    BuscarResponse,
-    PerguntarRequest,
-    RAGResponseModel,
-    BuscaPreviaResponse,
-    AdicionarArtigoRequest,
-    AdicionarArtigoResponse,
-    StatusResponse,
-    User,
-    KnowledgeBase
-)
-from .telemetria_ws import router as telemetria_router
 
 # Endpoint para listar coleções do Qdrant
 
 @app.get("/listar_colecoes")
 async def listar_colecoes():
-    """Retorna lista de coleções existentes no Qdrant, destacando wikipedia_langchain se presente"""
+    """Retorna lista de coleções existentes no MySQL (knowledge_bases) com id e nome"""
     try:
+        bases = listar_bases()
         colecoes = []
-        langchain_encontrada = False
-        if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
-            qdrant_client = wikipedia_offline_service.client
-            result = qdrant_client.get_collections()
-            if hasattr(result, "collections"):
-                colecoes = [c.name for c in result.collections]
-                langchain_encontrada = "wikipedia_langchain" in colecoes
+        for b in bases:
+            if 'id' in b and 'qdrant_collection' in b:
+                colecoes.append({
+                    'id': b['id'],
+                    'qdrant_collection': b['qdrant_collection']
+                })
+        # Mantém compatibilidade com frontend
         return {
             "colecoes": colecoes,
-            "wikipedia_langchain": langchain_encontrada
+            "wikipedia_langchain": any(c.get('qdrant_collection') == "wikipedia_langchain" for c in colecoes)
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"erro": f"Erro ao consultar coleções: {str(e)}"})
@@ -153,97 +149,61 @@ if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
 # Endpoint para criar coleção no Qdrant
-from fastapi import Request
 @app.post("/criar_colecao")
 async def criar_colecao(request: Request):
-    """Cria uma coleção no Qdrant com o nome e modelo de embedding fornecidos"""
+    """Cria uma coleção no Qdrant e insere no MySQL com o nome, modelo de embedding, dimensões e modelo LLM fornecidos"""
     try:
         data = await request.json()
         nome = data.get("nome", "").strip()
         modelo = data.get("modelo", "bge-large-pt").strip()
+        modelo_dim = data.get("dimensoes", 1024)
+        modelo_llm = data.get("modelo_llm", "qwen2.5:7b").strip()
+        logger.debug(f"[criar_colecao] Parâmetros extraídos: nome={nome}, modelo={modelo}, dimensoes={modelo_dim}, modelo_llm={modelo_llm}")
         if not nome:
-            return {"sucesso": False, "erro": "Nome da coleção não informado."}
-        # Definir dimensão do vetor conforme modelo
-        # Exemplos: bge-large-pt: 1024, bge-base-pt: 768, multi-qa-MiniLM-L6-cos-v1: 384
-        modelo_dimensoes = {
-            "bge-large-pt": 1024,
-            "bge-base-pt": 768,
-            "bge-large-en": 1024,
-            "bge-base-en": 768,
-            "multi-qa-MiniLM-L6-cos-v1": 384
-        }
-        dim = modelo_dimensoes.get(modelo, 384)
-        # Criar coleção usando Qdrant
-        if hasattr(wikipedia_offline_service, "client") and wikipedia_offline_service.client:
-            qdrant_client = wikipedia_offline_service.client
-            collections = qdrant_client.get_collections()
-            collection_names = [col.name for col in collections.collections]
-            if nome in collection_names:
-                return {"sucesso": False, "erro": "Coleção já existe."}
-            # Criar coleção
+             return {"sucesso": False, "erro": "Nome da coleção não informado."}
+        # Usar serviço para criar coleção
+        from services import colecaoService
+        resultado = colecaoService.criar_colecao(nome, modelo_dim=modelo_dim)
+        logger.debug(f"[criar_colecao] Resultado do criar_colecao: {resultado}")
+        if resultado.get("sucesso"):
+            # Inserir no MySQL
+            logger.debug("[criar_colecao] Coleção criada no Qdrant com sucesso. Iniciando inserção no MySQL...")
             try:
-                qdrant_client.create_collection(
-                    collection_name=nome,
-                    vectors_config=models.VectorParams(
-                        size=dim,
-                        distance=models.Distance.COSINE
-                    )
+                conn = get_connection()
+                cursor = conn.cursor(dictionary=True)
+                usuario_id = data.get("usuario_id") or 1
+                # Buscar embedding_model_id pelo nome do modelo
+                cursor.execute("SELECT id FROM embedding_models WHERE nome = %s", (modelo,))
+                embedding_row = cursor.fetchone()
+                if embedding_row:
+                    embedding_model_id = embedding_row["id"]
+                else:
+                    embedding_model_id = None
+                params = (nome, nome, usuario_id, modelo_llm)
+                insert_sql = (
+                    "INSERT INTO knowledge_bases "
+                    "(nome, qdrant_collection, usuario_id, embedding_model_id, modelo_llm, criado_em) "
+                    "VALUES (%s, %s, %s, 1, %s, NOW())"
                 )
-                return {"sucesso": True, "modelo": modelo, "dimensao": dim}
-            except Exception as e:
-                return {"sucesso": False, "erro": f"Erro ao criar coleção: {str(e)}"}
+                logger.info(f"[criar_colecao] Executando SQL: {insert_sql} com params: {params}")
+                cursor.execute(insert_sql, params)
+                conn.commit()
+                logger.debug("[criar_colecao] Inserção no MySQL realizada com sucesso.")
+                cursor.close()
+                conn.close()
+            except Exception as db_err:
+                logger.error(f"[criar_colecao] Erro ao inserir no MySQL: {db_err}")
+                return {"sucesso": False, "erro": f"Coleção criada no Qdrant, mas falha ao inserir no MySQL: {str(db_err)}"}
+            logger.info(f"[criar_colecao] Coleção '{nome}' criada e registrada no MySQL.")
+            return {"sucesso": True, "modelo": modelo, "modelo_llm": modelo_llm, "dimensao": modelo_dim}
         else:
-            return {"sucesso": False, "erro": "Qdrant não está conectado."}
+            logger.error(f"[criar_colecao] Falha ao criar coleção no Qdrant: {resultado}")
+            return resultado
     except Exception as e:
+        logger.error(f"[criar_colecao] Exceção geral: {e}")
         return {"sucesso": False, "erro": f"Erro: {str(e)}"}
 
-# --- MULTIUSUÁRIO: ENDPOINTS ---
-import mysql.connector
 
-def get_mysql_conn():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="root",
-        database="customkb"
-    )
-
-def get_or_create_user(email: str):
-    conn = get_mysql_conn()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
-    user = cursor.fetchone()
-    if not user:
-        cursor.execute("INSERT INTO users (email, criado_em) VALUES (%s, NOW())", (email,))
-        conn.commit()
-        cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return user
-
-@app.post("/login", response_model=User)
-async def login(email: str):
-    """Login por email. Cria usuário se não existir."""
-    user = get_or_create_user(email)
-    return User(**user)
-
-@app.post("/criar_base", response_model=KnowledgeBase)
-async def criar_base(email: str, nome: str):
-    """Cria uma base de conhecimento para o usuário (coleção Qdrant exclusiva)."""
-    user = get_or_create_user(email)
-    conn = get_mysql_conn()
-    cursor = conn.cursor(dictionary=True)
-    # Nome da coleção Qdrant: base_<usuario_id>_<nome>
-    qdrant_collection = f"base_{user['id']}_{nome}"
-    cursor.execute("INSERT INTO knowledge_bases (nome, usuario_id, qdrant_collection, criado_em) VALUES (%s, %s, %s, NOW())", (nome, user['id'], qdrant_collection))
-    conn.commit()
-    cursor.execute("SELECT * FROM knowledge_bases WHERE usuario_id=%s AND nome=%s", (user['id'], nome))
-    base = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    # TODO: criar coleção no Qdrant
-    return KnowledgeBase(**base)
 
 
 @app.get("/")
@@ -302,8 +262,6 @@ async def verificar_status(colecao: str = Query(None)):
             inicializado=False
         )
 
-
-
 @app.get("/estatisticas")
 async def obter_estatisticas(colecao: str = Query(None)):
     """Estatísticas da base de conhecimento, opcionalmente para uma coleção específica"""
@@ -314,10 +272,11 @@ async def obter_estatisticas(colecao: str = Query(None)):
 
 
 @app.get("/artigos")
-async def listar_artigos():
-    """Lista todos os artigos únicos na base de conhecimento"""
+async def listar_artigos(request: Request):
+    """Lista todos os artigos únicos na base de conhecimento, filtrando por coleção se informado"""
     try:
-        return wikipedia_offline_service.listar_todos_artigos()
+        colecao = request.query_params.get('colecao', None)
+        return wikipedia_offline_service.listar_todos_artigos(colecao=colecao)
     except Exception as e:
         logger.error(f"Erro ao listar artigos: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao listar artigos: {str(e)}")
@@ -1634,32 +1593,6 @@ async def status_download():
                     "completo": porcentagem >= 99.5,
                     "ultima_modificacao": filepath.stat().st_mtime
                 })
-            else:
-                status_downloads.append({
-                    "filename": filename,
-                    "status": "❌ Não encontrado",
-                    "porcentagem": 0,
-                    "mb_atual": 0,
-                    "mb_esperado": round(tamanho_esperado / (1024 * 1024), 1),
-                    "completo": False,
-                    "ultima_modificacao": None
-                })
-        
-        downloads_completos = sum(1 for d in status_downloads if d["completo"])
-        total_downloads = len(status_downloads)
-        
-        return {
-            "message": "Status de downloads da Wikipedia",
-            "downloads_completos": downloads_completos,
-            "total_downloads": total_downloads,
-            "progresso_geral": f"{downloads_completos}/{total_downloads} completos",
-            "downloads": status_downloads,
-            "recomendacao": {
-                "comando_monitoramento": "GET /dumps/status-download",
-                "frequencia": "Execute a cada 5-10 minutos",
-                "quando_completo": "Use POST /dumps/processar-real quando status=✅ Completo"
-            }
-        }
         
     except Exception as e:
         raise HTTPException(
@@ -1794,8 +1727,13 @@ async def manipulador_erro_global(request, exc):
         }
     )
 
+from .telemetria_ws import router as telemetria_router
+from api.dumpsAPI import router as dumps_router
+from api.dbAPI import router as db_router
 
 app.include_router(telemetria_router)
+app.include_router(db_router)
+app.include_router(dumps_router)
 
 if __name__ == "__main__":
     import uvicorn
