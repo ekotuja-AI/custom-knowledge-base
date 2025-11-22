@@ -208,41 +208,40 @@ class LangChainWikipediaService:
         self.sentence_transformers_available = SENTENCE_TRANSFORMERS_AVAILABLE
         self.qdrant_available = QDRANT_AVAILABLE
         
-    def inicializar(self):
-        """Inicializa o serviço LangChain (com fallbacks)"""
-        # Sempre permitir re-inicialização do modelo de embedding
-        force_reload_embedding = not self.sentence_transformers_available or self.embedding_model is None
+    def inicializar(self, colecao=None):
+        """Inicializa o serviço LangChain (com fallbacks), podendo receber coleção para carregar modelo correto"""
+
+
+        #verifica modelo de embedding   
+        model_name = getattr(self.embedding_model, 'model_name', None)
+        logger.info(f"🤖 Verificando nome do modelo de embedding: {model_name if model_name else self.embedding_model}")
         
+        logger.info("Status: %s", 'não disponível' if not self.sentence_transformers_available else 'disponível')
+
+        force_reload_embedding = not self.sentence_transformers_available or self.embedding_model is None
         if self._initialized and not force_reload_embedding:
+            logger.info("⚠️ Serviço LangChain já inicializado - pulando inicialização coleção %s", colecao)
             return
-            
         logger.info("🚀 Inicializando LangChain Wikipedia Service...")
         logger.info(f"   📦 LangChain: {'✅' if self.langchain_available else '❌'}")
         logger.info(f"   🤖 SentenceTransformers: {'✅' if self.sentence_transformers_available else '❌'}")
         logger.info(f"   🗄️ Qdrant: {'✅' if self.qdrant_available else '❌'}")
-        
         try:
             if self.qdrant_available and not self._initialized:
                 self._conectar_qdrant()
                 self._criar_colecao()
-            
-            # Sempre tentar carregar embedding model se ainda não estiver carregado
-            if self.embedding_model is None:
-                self._carregar_embedding_model()
-            
+            # Sempre tentar carregar embedding model se ainda não estiver carregado ou se coleção mudou
+            if self.embedding_model is None or colecao:
+                self._carregar_embedding_model(colecao=colecao)
             if not self._initialized:
                 self._configurar_text_splitter()
-            
             if self.qdrant_available and self.embedding_model is not None and not self._initialized:
                 self._configurar_retriever()
-            
             self._initialized = True
             status = "completo" if all([self.langchain_available, self.sentence_transformers_available, self.qdrant_available, self.embedding_model is not None]) else "parcial"
             logger.info(f"✅ LangChain Wikipedia Service inicializado ({status})!")
-            
         except Exception as e:
             logger.error(f"❌ Erro na inicialização: {e}")
-            # Ainda marca como inicializado em modo degradado
             self._initialized = True
             logger.warning("⚠️ Funcionando em modo degradado")
     
@@ -266,18 +265,32 @@ class LangChainWikipediaService:
             logger.warning(f"⚠️ Erro ao conectar Qdrant: {e}")
             self.qdrant_client = None
     
-    def _carregar_embedding_model(self):
-        """Carrega modelo de embeddings"""
+    def _carregar_embedding_model(self, model_name=None, colecao=None):
+        """Carrega modelo de embeddings, podendo usar nome específico da coleção"""
+        logger.info(f"🤖 Carregando modelo de embeddings... {model_name if model_name else 'padrão'}")
+        # Se colecao for informada, tenta buscar o nome do modelo da coleção no Qdrant
+        if colecao and self.qdrant_client is not None:
+            try:
+                col_info = self.qdrant_client.get_collection(colecao)
+                # Tenta buscar do config ou payload customizado
+                if hasattr(col_info, 'config') and hasattr(col_info.config, 'params'):
+                    model_name_from_collection = getattr(col_info.config.params, 'model_name', None)
+                    if model_name_from_collection:
+                        model_name = model_name_from_collection
+                if not model_name and hasattr(col_info, 'payload_schema'):
+                    model_name = col_info.payload_schema.get('model_name')
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível obter modelo da coleção '{colecao}': {e}")
+        if not model_name:
+            logger.info("⚠️ Usando modelo de embedding padrão")
+            model_name = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+        logger.info(f"🤖 Carregando modelo de embeddings...{model_name}")
         if not self.sentence_transformers_available:
             logger.warning("⚠️ SentenceTransformers não disponível")
             return
-            
-        model_name = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
-        logger.info(f"📚 Carregando modelo de embeddings: {model_name}")
-        
         try:
             self.embedding_model = SentenceTransformer(model_name)
-            logger.info("✅ Modelo de embeddings carregado")
+            logger.info(f"✅ Modelo de embeddings carregado: {model_name}")
         except Exception as e:
             logger.error(f"❌ Erro ao carregar modelo: {e}")
             self.embedding_model = None
@@ -499,17 +512,18 @@ class LangChainWikipediaService:
     
     def buscar_documentos(self, query: str, limit: int = 10, score_threshold: float = 0.5, colecao: str = None) -> List[SearchResult]:
         """Busca documentos usando LangChain retriever"""
-        if not self._initialized:
-            logger.error("❌ Serviço não inicializado - chamando inicializar()")
+        # Sempre recarrega modelo se coleção for informada
+        if not self._initialized or colecao:
+            logger.info("🔄 Recarregando modelo de embedding para coleção: %s", colecao)
             try:
-                self.inicializar()
+                self.inicializar(colecao=colecao)
             except Exception as e:
                 logger.error(f"❌ Falha ao inicializar: {e}")
                 return []
-            
-        self.collection_name = colecao if colecao is not None else self.collection_name    
+        self.collection_name = colecao if colecao is not None else self.collection_name
+        
         logger.info("*******************************************************************")
-        logger.info(f"🔍 Buscando focumentos na coleção '{self.collection_name}': '{query}' (limit={limit}, threshold={score_threshold})")
+        logger.info(f"🔍 Buscando documentos na coleção '{self.collection_name}': '{query}' (limit={limit}, threshold={score_threshold})")
         
         if self.embedding_model is None:
             logger.error("❌ Embedding model não inicializado")

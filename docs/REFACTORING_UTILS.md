@@ -254,3 +254,8 @@ service.resetar_metricas()
 5. **Mais Refatorações**
    - Extrair lógica de score boosting para classe
    - Separar lógica de prompt engineering
+
+---
+
+## 🆕 Suporte Multi-Coleção/Modelo
+- Refatorações e utilitários agora suportam múltiplas coleções e troca dinâmica de modelo de embedding.

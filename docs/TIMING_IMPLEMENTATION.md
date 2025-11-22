@@ -6,6 +6,11 @@ Mostrar ao usuário quanto tempo foi gasto em cada fase do processamento da perg
 2. **Geração com IA** - Tempo para o LLM (Ollama) gerar a resposta
 3. **Total** - Tempo completo de processamento
 
+## 🆕 Compatibilidade Multi-Coleção/Modelo
+
+- As métricas de tempo funcionam para qualquer coleção e modelo de embedding ativo.
+- O sistema permite trocar o modelo de embedding dinamicamente e medir o impacto nas respostas.
+
 ---
 
 ## Mudanças no Backend
@@ -186,11 +191,6 @@ const generationPercent = (generationTime / maxTime) * 100;
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Resposta                                                │
-├─────────────────────────────────────────────────────────┤
-│ Os fundadores do Império Inca - Ayar Uchu, Ayar Auca,  │
-│ Ayar Manco e suas irmãs - chegaram e estabeleceram-se  │
-│ em Cusco...                                             │
 ├─────────────────────────────────────────────────────────┤
 │ ⏱️ Total: 15.2s | 🔍 Busca: 0.35s | 🤖 IA: 12.45s      │
 │ 📚 3 fontes                                             │

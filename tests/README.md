@@ -92,6 +92,9 @@ Os testes focam em:
 - ✅ Criação de objetos
 - ✅ Métodos auxiliares
 
+## 🆕 Cobertura Multi-Coleção/Modelo
+- Testes cobrem operações com múltiplas coleções e troca dinâmica de modelo de embedding via API/script.
+
 ## 📦 Dependências de Teste
 
 Para executar os testes, instale:

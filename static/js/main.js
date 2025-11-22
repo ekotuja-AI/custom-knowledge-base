@@ -41,6 +41,14 @@ export function iniciarWebSocketTelemetria() {
     };
 }
 
+
+export async function loadModeloEmbeddings(colecaoNome) {   
+    const statusUrl = `/status${colecaoNome ? `?colecao=${encodeURIComponent(colecaoNome)}` : ''}`;
+    const statusResp = await fetch(statusUrl);
+    return statusResp.json();
+        
+}    
+
 export async function loadStats() {
     try {
         const dropdown = document.getElementById('qdrant-collections-dropdown');

@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 from services.dbService import listar_bases, buscar_dimensao_embedding, get_connection, get_or_create_user
 from services.wikipediaOfflineService import wikipedia_offline_service
+from services.langchainWikipediaService import langchain_wikipedia_service
+
 from services.wikipediaDumpService import wikipedia_dump_processor
 from api.models import (
     StatusResponse,
@@ -30,7 +32,39 @@ from api.models import (
     BuscarRequest,
     AdicionarArtigoRequest
 )
-app = FastAPI()
+# Lifecycle management
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("🚀 Inicializando serviços...")
+    wikipedia_offline_service.inicializar()
+    logger.info("✅ Serviços inicializados!")
+    yield
+    # Shutdown
+    logger.info("👋 Encerrando serviços...")
+
+# Definição do objeto FastAPI
+app = FastAPI(
+    title="Wikipedia Offline Vector Search API - Funcional",
+    lifespan=lifespan,
+    description="API offline para Wikipedia com LLM local.\n\n### 🤖 RAG com LLM Local\n- Perguntas respondidas pelo modelo Phi-3 Mini\n- Respostas baseadas em artigos da Wikipedia\n- Sistema completamente offline\n\n### 📚 Gestão de Conteúdo\n- Adicione artigos da Wikipedia à base local\n- Processamento automático em chunks\n- Armazenamento no Qdrant\n\n## 🛠️ Stack Tecnológica\n- Qdrant: Banco vetorial para busca semântica\n- Ollama + Phi-3: LLM local para respostas\n- FastAPI: API REST moderna\n- Wikipedia API: Fonte de dados\n\n## 🚀 Como Usar\n1. Use /adicionar para incluir artigos da Wikipedia\n2. Use /buscar para encontrar conteúdo relevante\n3. Use /perguntar para fazer perguntas com RAG",
+    version="2.0.0-funcional",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Endpoint para trocar modelo de embedding dinamicamente
+from fastapi import Body
+
+@app.post("/trocar_modelo")
+async def trocar_modelo(model_name: str = Body(..., embed=True)):
+    """Troca o modelo de embedding do LangChainWikipediaService em tempo real (sem reiniciar container)"""
+    try:
+        langchain_wikipedia_service._carregar_embedding_model(model_name=model_name)
+        nome_carregado = getattr(langchain_wikipedia_service.embedding_model, 'model_name', None)
+        return {"sucesso": True, "modelo_carregado": nome_carregado or str(langchain_wikipedia_service.embedding_model)}
+    except Exception as e:
+        return {"sucesso": False, "erro": str(e)}
 
 
 # Rota para servir landing.html diretamente
@@ -80,27 +114,6 @@ async def listar_colecoes():
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"erro": f"Erro ao consultar coleções: {str(e)}"})
-
-# Lifecycle management
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("🚀 Inicializando serviços...")
-    wikipedia_offline_service.inicializar()
-    logger.info("✅ Serviços inicializados!")
-    yield
-    # Shutdown
-    logger.info("👋 Encerrando serviços...")
-
-# Definição do objeto FastAPI
-app = FastAPI(
-    title="Wikipedia Offline Vector Search API - Funcional",
-    lifespan=lifespan,
-    description="API offline para Wikipedia com LLM local.\n\n### 🤖 RAG com LLM Local\n- Perguntas respondidas pelo modelo Phi-3 Mini\n- Respostas baseadas em artigos da Wikipedia\n- Sistema completamente offline\n\n### 📚 Gestão de Conteúdo\n- Adicione artigos da Wikipedia à base local\n- Processamento automático em chunks\n- Armazenamento no Qdrant\n\n## 🛠️ Stack Tecnológica\n- Qdrant: Banco vetorial para busca semântica\n- Ollama + Phi-3: LLM local para respostas\n- FastAPI: API REST moderna\n- Wikipedia API: Fonte de dados\n\n## 🚀 Como Usar\n1. Use /adicionar para incluir artigos da Wikipedia\n2. Use /buscar para encontrar conteúdo relevante\n3. Use /perguntar para fazer perguntas com RAG",
-    version="2.0.0-funcional",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
 
 # Rota para servir landing.html diretamente
 @app.get("/landing.html")
@@ -163,7 +176,7 @@ async def criar_colecao(request: Request):
              return {"sucesso": False, "erro": "Nome da coleção não informado."}
         # Usar serviço para criar coleção
         from services import colecaoService
-        resultado = colecaoService.criar_colecao(nome, modelo_dim=modelo_dim)
+        resultado = colecaoService.criar_colecao(nome, modelo_dim=modelo_dim, model_name=modelo)
         logger.debug(f"[criar_colecao] Resultado do criar_colecao: {resultado}")
         if resultado.get("sucesso"):
             # Inserir no MySQL
@@ -251,6 +264,7 @@ async def verificar_status(colecao: str = Query(None)):
     """Verifica status de todos os componentes, opcionalmente para uma coleção específica"""
     try:
         status_info = wikipedia_offline_service.verificar_status(colecao)
+        logger.debug(f"[verificar_status] Status retornado: {status_info}")
         return StatusResponse(**status_info)
     except Exception as e:
         return StatusResponse(

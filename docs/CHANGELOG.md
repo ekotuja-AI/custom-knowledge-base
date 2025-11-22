@@ -82,3 +82,8 @@
 2. Ajustar thresholds de similaridade se necessário
 3. Adicionar mais artigos relevantes conforme necessidade
 4. Monitorar performance das buscas com os novos logs
+
+## 🆕 Novidades Recentes
+- Suporte a múltiplas coleções e troca dinâmica de modelo de embedding via API
+- Script utilitário para listar modelos e mostrar o modelo ativo
+- Limpeza e organização dos arquivos de documentação

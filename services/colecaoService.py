@@ -22,8 +22,14 @@ def listar_colecoes() -> Dict[str, Any]:
         "wikipedia_langchain": langchain_encontrada
     }
 
-def criar_colecao(nome: str, modelo_dim: int = 1024, distancia: str = "COSINE") -> Dict[str, Any]:
-    """Cria uma coleção no Qdrant com nome, dimensão e distância"""
+import uuid
+
+import uuid
+
+# ...existing code...
+
+def criar_colecao(nome: str, modelo_dim: int = 1024, distancia: str = "COSINE", model_name: str = None) -> Dict[str, Any]:
+    """Cria uma coleção no Qdrant com nome, dimensão, distância e salva model_name no payload de um ponto dummy"""
     try:
         # Verifica se já existe
         result = qdrant_client.get_collections()
@@ -38,7 +44,16 @@ def criar_colecao(nome: str, modelo_dim: int = 1024, distancia: str = "COSINE") 
                 distance=getattr(models.Distance, distancia)
             )
         )
-        return {"sucesso": True, "nome": nome, "dimensao": modelo_dim, "distancia": distancia}
+        # Se model_name fornecido, insere ponto dummy com esse campo
+        if model_name:
+            from qdrant_client.http.models import PointStruct
+            dummy_point = PointStruct(
+                id=str(uuid.uuid4()),  # Gera um UUID válido
+                vector=[0.0] * modelo_dim,
+                payload={"model_name": model_name, "meta": True}
+            )
+            qdrant_client.upsert(collection_name=nome, points=[dummy_point])
+        return {"sucesso": True, "nome": nome, "dimensao": modelo_dim, "distancia": distancia, "model_name": model_name}
     except Exception as e:
         return {"sucesso": False, "erro": str(e)}
 

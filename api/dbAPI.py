@@ -13,8 +13,6 @@ router = APIRouter()
 
 @router.get("/dbService/embedding_dimensao")
 def get_embedding_dimensao(nome: str = Query(...)):
-    # Log opcional
-    print(f"################## API: Buscando dimensão do modelo de embedding '{nome}'...")
     dim = buscar_dimensao_embedding(nome)
     return {"dimensao": dim}
 

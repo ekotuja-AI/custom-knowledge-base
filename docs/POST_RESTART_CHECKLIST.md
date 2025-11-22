@@ -37,6 +37,13 @@
    curl "http://localhost:9000/langchain/stats"
    ```
 
+### Verificar modelo de embedding ativo
+Após reiniciar, execute:
+```bash
+python scripts/ver_modelos_embedding.py
+```
+Isso garante que o modelo correto está carregado no serviço LangChain.
+
 ### Benefícios após restart:
 
 ✅ **Docker funcionando** normalmente

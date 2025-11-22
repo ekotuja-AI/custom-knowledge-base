@@ -123,6 +123,17 @@ exit
 ./utils.sh qdrant-info
 ```
 
+## 📦 Gerenciamento de Modelos de Embedding
+
+- **Listar modelos baixados e ver o modelo ativo:**
+  ```bash
+  python scripts/ver_modelos_embedding.py
+  ```
+  - Mostra todos os modelos de embedding no cache do HuggingFace e o modelo atualmente ativo no serviço LangChain.
+
+- **Trocar modelo de embedding dinamicamente:**
+  - Use o endpoint `/trocar_modelo` via API ou o script de teste para alterar o modelo sem reiniciar o container.
+
 ## 🔧 Requisitos
 
 ### Para `utils.sh`:

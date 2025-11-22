@@ -121,6 +121,10 @@ response = ollama.chat(
 4. ⏳ Implementar tool calling no RAG
 5. ⏳ Adicionar mais artigos da Wikipedia
 
+## 🆕 Novidade
+
+- Agora o sistema suporta troca dinâmica de modelo de embedding via API e script utilitário.
+
 ## Referências
 
 - [Qwen Documentation](https://qwen.readthedocs.io/)

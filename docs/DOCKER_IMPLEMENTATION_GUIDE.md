@@ -106,6 +106,16 @@ failed to solve: write /var/lib/docker/buildkit/: input/output error
 2. **Ou** reinstalar Docker Desktop
 3. **Ou** usar Docker em WSL2 diretamente
 
+## 📦 Modelos de Embedding
+
+- Para verificar os modelos baixados e o modelo ativo no container:
+  ```bash
+  python scripts/ver_modelos_embedding.py
+  ```
+  - Mostra todos os modelos de embedding no cache do HuggingFace e o modelo atualmente ativo.
+
+- Para trocar o modelo de embedding dinamicamente, utilize o endpoint `/trocar_modelo` via API.
+
 ## 📊 Demonstração Local
 
 Para demonstrar que tudo funciona, execute localmente:

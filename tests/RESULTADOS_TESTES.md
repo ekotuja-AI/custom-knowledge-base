@@ -45,6 +45,9 @@
 
 **Status:** ✅ 14/14 passaram
 
+## 🆕 Cobertura Multi-Coleção/Modelo
+- Testes cobrem operações com múltiplas coleções e troca dinâmica de modelo de embedding via API/script.
+
 ## 🚀 Características dos Testes
 
 ### ⚡ Performance

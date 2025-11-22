@@ -142,6 +142,19 @@ Veja documentação completa em [`README_UTILS.md`](README_UTILS.md).
 
 ---
 
+### 📦 Gerenciamento de Modelos de Embedding
+
+- **Listar modelos baixados e ver o modelo ativo:**
+  ```bash
+  python scripts/ver_modelos_embedding.py
+  ```
+  - Mostra todos os modelos de embedding no cache do HuggingFace e o modelo atualmente ativo no serviço LangChain.
+
+- **Trocar modelo de embedding dinamicamente:**
+  - Use o endpoint `/trocar_modelo` via API ou o script de teste para alterar o modelo sem reiniciar o container.
+
+---
+
 ## 🔌 API REST Completa
 
 | Método | Rota | Função | Exemplo |
@@ -434,6 +447,9 @@ docker exec ollama_server ollama list
 - Formatação de data/hora nas mensagens de telemetria: datas exibidas em formato legível.
 - Filtro de termos aprimorado: perguntas abertas como "o que é Jakarta?" agora extraem corretamente o termo principal, garantindo resultados relevantes.
 - Troubleshooting atualizado: se a mensagem de status só aparece após a resposta, verifique se o frontend está ouvindo o WebSocket e exibindo incrementalmente.
+- Suporte a múltiplas coleções e troca dinâmica de modelo de embedding via API.
+- Script utilitário para listar modelos e mostrar o modelo ativo.
+- Limpeza e organização dos arquivos de documentação.
 
 ---
 
@@ -450,6 +466,7 @@ docker exec ollama_server ollama list
 - [x] Métricas de timing em tempo real
 - [x] Threshold adaptativo por tamanho da base
 - [x] Text index para busca full-text
+- [x] Suporte a múltiplas coleções e troca dinâmica de modelo de embedding
 
 ### 🚧 Em Desenvolvimento (v1.3)
 - [ ] Cache Redis para respostas frequentes

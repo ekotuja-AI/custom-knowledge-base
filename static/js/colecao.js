@@ -50,6 +50,7 @@ async function criarColecao() {
     let body = JSON.stringify({
         nome: nome,
         embedding_model_id: embedding_model_id,
+        modelo: modelo_embedding_desc,
         dimensoes: dimensoes,
         modelo_llm: modelo_llm
     });

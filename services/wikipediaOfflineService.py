@@ -1215,6 +1215,8 @@ class WikipediaOfflineService:
     
     def _get_embedding_dimensions(self, collection_name=None):
         logger.debug(f"#############   _get_embedding_dimensions chamada: {collection_name}")
+        nome = None
+        dimensao = None
         # Se collection_name for informado, buscar modelo do banco
         if collection_name:
             try:
@@ -1224,12 +1226,12 @@ class WikipediaOfflineService:
                 cursor.execute("SELECT embedding_model_id FROM knowledge_bases WHERE qdrant_collection = %s", (collection_name,))
                 row = cursor.fetchone()
                 if row and row["embedding_model_id"]:
-                    cursor.execute("SELECT dimensao FROM embedding_models WHERE id = %s", (row["embedding_model_id"],))
+                    cursor.execute("SELECT nome, dimensao, descricao FROM embedding_models WHERE id = %s", (row["embedding_model_id"],))
                     dim_row = cursor.fetchone()
-                    if dim_row and dim_row["dimensao"]:
-                        cursor.close()
-                        conn.close()
-                        return int(dim_row["dimensao"])
+                    if dim_row:
+                        nome = dim_row.get("nome")
+                        dimensao = dim_row.get("dimensao")
+                        descricao = dim_row.get("descricao")
                 cursor.close()
                 conn.close()
             except Exception as e:
@@ -1237,15 +1239,21 @@ class WikipediaOfflineService:
         # Se você tiver o objeto do modelo carregado:   
         if hasattr(self, "embedding_model") and self.embedding_model is not None:
             try:
-                return self.embedding_model.get_sentence_embedding_dimension()
+                dimensao = self.embedding_model.get_sentence_embedding_dimension()
+                nome = getattr(self.embedding_model, "model_name", self.embedding_model_name)
             except:
                 pass
         # Fallback baseado no nome
-        if self.embedding_model_name == "paraphrase-multilingual-MiniLM-L12-v2":
-            return 384
-        if self.embedding_model_name == "bge-m3":
-            return 1024
-        return None
+        if not nome:
+            nome = self.embedding_model_name
+        if not descricao:
+            descricao = "Indefinido"      
+        if not dimensao:
+            if self.embedding_model_name == "paraphrase-multilingual-MiniLM-L12-v2":
+                dimensao = 384
+            elif self.embedding_model_name == "bge-m3":
+                dimensao = 1024
+        return {"nome": nome, "dimensao": dimensao, "descricao": descricao}
 
 
     def verificar_status(self, colecao=None) -> Dict[str, Any]:
@@ -1281,7 +1289,7 @@ class WikipediaOfflineService:
 
 
         dimensoes = self._get_embedding_dimensions(collection_name)
-        # Se quiser retornar status da coleção específica, pode customizar aqui
+        logger.debug(f"%%%%%%   verificar_status retornando dimensoes: {dimensoes}")
         return {
             "status": "ok" if self._initialized else "error",
             "qdrant_conectado": self.client is not None,
@@ -1289,8 +1297,9 @@ class WikipediaOfflineService:
             "colecoes": colecoes_count,
             "colecoes_lista": colecoes_lista,
             "modelo_embedding_carregado": True,  # ajuste conforme lógica real
-            "modelo_embedding_nome": collection_name,
-            "modelo_embedding_dimensoes": dimensoes,
+            "modelo_embedding_nome": dimensoes.get("nome"),
+            "modelo_embedding_dimensoes": dimensoes.get("dimensao"),
+            "modelo_embedding_descricao": dimensoes.get("descricao"),   
             "text_splitter_configurado": True,    # ajuste conforme lógica real
             "openai_configurado": False,
             "inicializado": self._initialized,

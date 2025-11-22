@@ -16,11 +16,31 @@
     </div>
     <div class="container">
         <div class="header">
-            <h1>📚 Base de Conhecimento</h1>
-            <p>Explore e busque artigos da Wikipedia na base vetorial</p>
-            <div class="action-buttons">
-                <button class="btn btn-primary" onclick="window.location.href='/'">🏠 Voltar</button>
-                <button class="btn btn-secondary" onclick="carregarArtigos()">🔄 Atualizar</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h1>📚 Base de Conhecimento</h1>
+                    <p>Explore e busque artigos da Wikipedia na base vetorial</p>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="window.location.href='/'">🏠 Voltar</button>
+                        <button class="btn btn-secondary" onclick="carregarArtigos()">🔄 Atualizar</button>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:340px;width:100%;">
+                    <div class="stat-card" style="width:100%;min-width:320px;max-width:100%;padding:18px 24px;box-sizing:border-box;">
+                        <div style="margin-bottom:10px;display:flex;align-items:center;width:100%;">
+                            <span class="stat-label" style="font-size:0.92em;color:#667eea;font-weight:600;width:140px;display:inline-block;text-align:left;">🔗 Modelo de Embeddings</span>
+                            <span class="stat-value" id="embeddingModel" style="font-size:0.82em;color:#222;text-align:left;flex-grow:1;">-</span>
+                        </div>
+                        <div style="margin-bottom:10px;display:flex;align-items:center;width:100%;">
+                            <span class="stat-label" style="font-size:0.92em;color:#667eea;font-weight:600;width:140px;display:inline-block;text-align:left;">📏 Dimensões</span>
+                            <span class="stat-value" id="embeddingDim" style="font-size:0.82em;color:#222;text-align:left;flex-grow:1;">-</span>
+                        </div>
+                        <div style="display:flex;align-items:center;width:100%;">
+                            <span class="stat-label" style="font-size:0.92em;color:#667eea;font-weight:600;width:140px;display:inline-block;text-align:left;">📝 Descrição</span>
+                            <span class="stat-value" id="embeddingDescricao" style="font-size:0.82em;color:#222;text-align:left;flex-grow:1;">-</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -92,7 +112,7 @@
     </div>
 
     <script type="module">
-        import { loadQdrantCollections } from '/static/js/main.js';
+        import { loadQdrantCollections, loadModeloEmbeddings } from '/static/js/main.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const dropdown = document.getElementById('qdrant-collections-dropdown');
@@ -185,6 +205,16 @@
                 artigosFiltrados = [...todosArtigos];
                 document.getElementById('totalArtigos').textContent = data.total || 0;
                 document.getElementById('totalChunks').textContent = data.total_chunks || 0;
+
+                const responseColecao = await fetch(endpoint);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const modeloEmbedding = await loadModeloEmbeddings(colecao)
+
+                document.getElementById('embeddingModel').textContent = modeloEmbedding.modelo_embedding_nome;
+                document.getElementById('embeddingDim').textContent = modeloEmbedding.modelo_embedding_dimensoes;
+                document.getElementById('embeddingDescricao').textContent = modeloEmbedding.modelo_embedding_descricao || '-';
                 ordenar(ordenacaoAtual);
                 renderizarArtigos();
             } catch (error) {
